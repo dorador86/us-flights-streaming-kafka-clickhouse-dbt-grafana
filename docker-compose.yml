@@ -1,0 +1,82 @@
+services:
+  # --- Kafka: Motor de mensajería Oficial de Apache (KRaft mode) ---
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      - KAFKA_NODE_ID=1
+      - KAFKA_PROCESS_ROLES=broker,controller
+      - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@localhost:9093
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      # Optimización JVM para baja memoria
+      - KAFKA_HEAP_OPTS=-Xmx1G -Xms1G
+    deploy:
+      resources:
+        limits:
+          memory: 1200M
+    networks:
+      - flights_net
+
+  # --- ClickHouse: Base de Datos Analítica (OLAP) ---
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    deploy:
+      resources:
+        limits:
+          memory: 1000M
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    networks:
+      - flights_net
+
+  # --- Prometheus: Monitorización ---
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=7d'
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    networks:
+      - flights_net
+
+  # --- Grafana: Visualización ---
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    networks:
+      - flights_net
+
+networks:
+  flights_net:
+    driver: bridge
+
+volumes:
+  clickhouse_data:
