@@ -1,0 +1,7 @@
+confluent-kafka==2.3.0
+pandas==2.1.4
+pyarrow==14.0.1
+fastavro==1.9.2
+great_expectations==0.18.8
+python-dotenv==1.0.0
+tqdm==4.66.1
