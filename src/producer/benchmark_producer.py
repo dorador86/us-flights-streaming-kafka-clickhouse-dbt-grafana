@@ -8,7 +8,7 @@ from confluent_kafka import Producer
 import fastavro
 
 class FlightProducer:
-    def __init__(self, bootstrap_servers='localhost:9092', schema_path='src/producer/flight_schema.avsc'):
+    def __init__(self, bootstrap_servers='localhost:29092', schema_path='src/producer/flight_schema.avsc'):
         # Configuración optimizada para rendimiento
         self.producer_conf = {
             'bootstrap.servers': bootstrap_servers,
@@ -79,15 +79,16 @@ class FlightProducer:
         return count, time.time() - start_time
 
     def _send_to_kafka(self, record):
-        """Serializa en Avro y envía. Limpia NaN de Pandas para que Avro acepte 'None'."""
-        # Limpieza de nulos de Pandas (NaN -> None) para compatibilidad con Avro
+        """Serializa en JSON y envía. Mucho más sencillo para depurar la fase inicial."""
+        # Limpieza de nulos de Pandas (NaN -> None) que en JSON se convierte a null
         cleaned_record = {k: (None if pd.isna(v) else v) for k, v in record.items()}
         
-        fo = io.BytesIO()
-        fastavro.schemaless_writer(fo, self.schema, cleaned_record)
+        # En JSON, el timestamp-micros lo enviamos como el número largo directamente
+        json_payload = json.dumps(cleaned_record)
+        
         self.producer.produce(
             self.topic, 
-            value=fo.getvalue(), 
+            value=json_payload.encode('utf-8'), 
             callback=self._delivery_report
         )
 
