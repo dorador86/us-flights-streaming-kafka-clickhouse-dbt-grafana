@@ -1,0 +1,25 @@
+[0m18:39:29  Running with dbt=1.11.2
+[0m18:39:30  Registered adapter: clickhouse=1.9.7
+[0m18:39:30  Found 4 models, 1 source, 486 macros
+[0m18:39:30  
+[0m18:39:30  Concurrency: 1 threads (target='dev')
+[0m18:39:30  
+[0m18:39:31  1 of 4 START sql view model `analytics`.`stg_flights` .......................... [RUN]
+[0m18:39:31  1 of 4 OK created sql view model `analytics`.`stg_flights` ..................... [[32mOK[0m in 0.08s]
+[0m18:39:31  2 of 4 START sql table model `analytics`.`silver_flights_enriched` ............. [RUN]
+[0m18:39:32  2 of 4 ERROR creating sql table model `analytics`.`silver_flights_enriched` .... [[31mERROR[0m in 0.56s]
+[0m18:39:32  3 of 4 SKIP relation analytics.gold_airline_daily .............................. [[33mSKIP[0m]
+[0m18:39:32  4 of 4 SKIP relation analytics.gold_airport_daily .............................. [[33mSKIP[0m]
+[0m18:39:32  
+[0m18:39:32  Finished running 3 table models, 1 view model in 0 hours 0 minutes and 1.50 seconds (1.50s).
+[0m18:39:32  
+[0m18:39:32  [31mCompleted with 1 error, 0 partial successes, and 0 warnings:[0m
+[0m18:39:32  
+[0m18:39:32  [31mFailure in model silver_flights_enriched (models/marts/silver/silver_flights_enriched.sql)[0m
+[0m18:39:32    Database Error in model silver_flights_enriched (models/marts/silver/silver_flights_enriched.sql)
+  Received ClickHouse exception, code: 243, server response: Code: 243. DB::Exception: Cannot reserve 281.61 MiB, not enough space. (NOT_ENOUGH_SPACE) (version 24.3.18.7 (official build)) (for url http://localhost:8123)
+  compiled code at target/run/flights_analytics/models/marts/silver/silver_flights_enriched.sql
+[0m18:39:32  
+[0m18:39:32    compiled code at target/compiled/flights_analytics/models/marts/silver/silver_flights_enriched.sql
+[0m18:39:32  
+[0m18:39:32  Done. PASS=1 WARN=0 ERROR=1 SKIP=2 NO-OP=0 TOTAL=4

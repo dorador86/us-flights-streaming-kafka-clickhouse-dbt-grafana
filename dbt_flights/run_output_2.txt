@@ -1,0 +1,20 @@
+[0m18:41:15  Running with dbt=1.11.2
+[0m18:41:15  Registered adapter: clickhouse=1.9.7
+[0m18:41:16  Found 4 models, 1 source, 486 macros
+[0m18:41:16  
+[0m18:41:16  Concurrency: 1 threads (target='dev')
+[0m18:41:16  
+[0m18:41:16  1 of 4 START sql view model `analytics`.`stg_flights` .......................... [RUN]
+[0m18:41:16  1 of 4 OK created sql view model `analytics`.`stg_flights` ..................... [[32mOK[0m in 0.08s]
+[0m18:41:16  2 of 4 START sql table model `analytics`.`silver_flights_enriched` ............. [RUN]
+[0m18:41:18  2 of 4 OK created sql table model `analytics`.`silver_flights_enriched` ........ [[32mOK[0m in 1.64s]
+[0m18:41:18  3 of 4 START sql table model `analytics`.`gold_airline_daily` .................. [RUN]
+[0m18:41:18  3 of 4 OK created sql table model `analytics`.`gold_airline_daily` ............. [[32mOK[0m in 0.20s]
+[0m18:41:18  4 of 4 START sql table model `analytics`.`gold_airport_daily` .................. [RUN]
+[0m18:41:18  4 of 4 OK created sql table model `analytics`.`gold_airport_daily` ............. [[32mOK[0m in 0.10s]
+[0m18:41:18  
+[0m18:41:18  Finished running 3 table models, 1 view model in 0 hours 0 minutes and 2.63 seconds (2.63s).
+[0m18:41:18  
+[0m18:41:18  [32mCompleted successfully[0m
+[0m18:41:18  
+[0m18:41:18  Done. PASS=4 WARN=0 ERROR=0 SKIP=0 NO-OP=0 TOTAL=4

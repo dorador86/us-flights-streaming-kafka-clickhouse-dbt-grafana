@@ -1,0 +1,11 @@
+flights_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: clickhouse
+      schema: analytics  # Esto creará/usará la base de datos 'analytics' en ClickHouse
+      host: localhost
+      port: 8123
+      user: admin
+      password: admin
+      secure: false

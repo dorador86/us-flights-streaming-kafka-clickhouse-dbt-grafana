@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: flights_source
+    database: flights
+    schema: flights  # En ClickHouse schema = database
+    tables:
+      - name: flights_raw
