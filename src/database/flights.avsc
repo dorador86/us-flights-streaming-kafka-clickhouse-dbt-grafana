@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "Flight",
+  "fields": [
+    {"name": "Airline", "type": "string"},
+    {"name": "Cancelled", "type": "int"},
+    {"name": "DepDelay", "type": ["null", "float"]},
+    {"name": "Dest", "type": "string"},
+    {"name": "Distance", "type": "float"},
+    {"name": "FlightDate", "type": "long"},
+    {"name": "Origin", "type": "string"}
+  ]
+}

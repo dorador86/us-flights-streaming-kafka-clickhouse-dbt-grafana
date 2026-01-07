@@ -32,9 +32,25 @@ services:
     networks:
       - flights_net
 
+  # --- Schema Registry: Gestión de Esquemas Avro ---
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.0
+    hostname: schema-registry
+    container_name: schema-registry
+    depends_on:
+      - kafka
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka:9092'
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    networks:
+      - flights_net
+
   # --- ClickHouse: Base de Datos Analítica (OLAP) ---
   clickhouse:
-    image: clickhouse/clickhouse-server:latest
+    image: clickhouse/clickhouse-server:24.3-alpine
     container_name: clickhouse
     ports:
       - "8123:8123"
@@ -53,6 +69,7 @@ services:
           memory: 1500M
     volumes:
       - clickhouse_data:/var/lib/clickhouse
+      - ./clickhouse_schemas:/var/lib/clickhouse/format_schemas
     networks:
       - flights_net
 

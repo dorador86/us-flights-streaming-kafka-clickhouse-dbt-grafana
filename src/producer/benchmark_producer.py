@@ -1,117 +1,124 @@
+from confluent_kafka import Producer
+from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry.avro import AvroSerializer
+from confluent_kafka.serialization import SerializationContext, MessageField
 import pandas as pd
 import pyarrow.parquet as pq
 import time
 import json
-import os
-import io
-from confluent_kafka import Producer
-import fastavro
 
-class FlightProducer:
-    def __init__(self, bootstrap_servers='localhost:29092', schema_path='src/producer/flight_schema.avsc'):
-        # Configuración optimizada para rendimiento
+class FlightRegistryProducer:
+    def __init__(self, bootstrap_servers='localhost:29092', registry_url='http://localhost:8081'):
+        # 1. Configurar Cliente del Registry
+        schema_registry_conf = {'url': registry_url}
+        self.registry_client = SchemaRegistryClient(schema_registry_conf)
+
+        # 2. Definir Esquema Avro (Coincide con ClickHouse)
+        self.schema_str = """
+        {
+          "type": "record",
+          "name": "FlightRecord",
+          "namespace": "com.flights",
+          "fields": [
+            {"name": "FlightDate", "type": "long"},
+            {"name": "Airline", "type": "string"},
+            {"name": "Origin", "type": "string"},
+            {"name": "Dest", "type": "string"},
+            {"name": "Cancelled", "type": "int"},
+            {"name": "DepDelay", "type": ["null", "float"], "default": null},
+            {"name": "Distance", "type": "float"},
+            {"name": "Year", "type": "int"},
+            {"name": "Quarter", "type": "int"},
+            {"name": "Month", "type": "int"},
+            {"name": "DayofMonth", "type": "int"},
+            {"name": "DayOfWeek", "type": "int"},
+            {"name": "Marketing_Airline_Network", "type": "string"},
+            {"name": "OriginCityName", "type": "string"},
+            {"name": "OriginState", "type": "string"},
+            {"name": "DestCityName", "type": "string"},
+            {"name": "DestState", "type": "string"},
+            {"name": "AirTime", "type": ["null", "float"], "default": null},
+            {"name": "Diverted", "type": "int"}
+          ]
+        }
+        """
+
+        # 3. Serializador Optimizado
+        self.serializer = AvroSerializer(self.registry_client,
+                                         self.schema_str,
+                                         lambda obj, ctx: obj)
+
+        # 4. Config Kafka (High Throughput)
         self.producer_conf = {
             'bootstrap.servers': bootstrap_servers,
-            'client.id': 'flights-benchmark-producer',
-            'linger.ms': 10,               # Espera 10ms para agrupar mensajes
-            'batch.num.messages': 1000,    # Agrupa hasta 1000 mensajes
-            'queue.buffering.max.messages': 100000
+            'linger.ms': 20, # Esperar un poco para hacer batches más grandes
+            'batch.size': 131072, # 128KB batches
+            'compression.type': 'lz4', # Compresión rápida
+            'acks': '1' # Rapidez sobre durabilidad extrema
         }
         self.producer = Producer(self.producer_conf)
-        self.schema = self._load_schema(schema_path)
-        self.topic = 'raw_flights'
+        self.topic = 'flights_avro_pro'
 
-    def _load_schema(self, path):
-        with open(path, "r") as f:
-            return fastavro.parse_schema(json.load(f))
-
-    def _delivery_report(self, err, msg):
-        if err is not None:
-            print(f"Error en envío: {err}")
-
-    def produce_parquet(self, file_path, limit=50000):
-        """Lee Parquet por bloques (Batches) para ahorrar RAM."""
-        print(f"\n>>> Iniciando Ingesta desde PARQUET: {file_path}")
+    def produce_from_parquet(self, file_path, limit=None):
+        print(f"\n>>> [AVRO-REGISTRY] Ingesting from: {file_path}")
         start_time = time.time()
-        count = 0
         
         parquet_file = pq.ParquetFile(file_path)
-        
-        # Iteramos por batches de 1000 filas
-        for batch in parquet_file.iter_batches(batch_size=1000):
-            df = batch.to_pandas()
-            # En Parquet, pandas suele leerlo como datetime64[us] o [ns]
-            # Basado en nuestras pruebas, viene en microsegundos (16 dígitos)
-            df['FlightDate'] = df['FlightDate'].astype('int64')
-            
-            for _, row in df.iterrows():
-                self._send_to_kafka(row.to_dict())
-                count += 1
-                if count >= limit: break
-            
-            if count >= limit: break
-            print(f"  [Parquet] Mensajes enviados: {count}")
-            self.producer.poll(0)
-
-        self.producer.flush()
-        return count, time.time() - start_time
-
-    def produce_csv(self, file_path, limit=50000):
-        """Lee CSV por trozos (Chunks) para ahorrar RAM."""
-        print(f"\n>>> Iniciando Ingesta desde CSV: {file_path}")
-        start_time = time.time()
         count = 0
+        total_batches = 0
         
-        # Leemos en trozos de 1000
-        for chunk in pd.read_csv(file_path, chunksize=1000):
-            # Adaptamos FlightDate (en CSV suele ser String)
-            # En CSV viene como string, pasamos a datetime y luego a MICROsegundos (// 10**3)
-            chunk['FlightDate'] = pd.to_datetime(chunk['FlightDate']).astype('int64') // 10**3
-            
-            for _, row in chunk.iterrows():
-                self._send_to_kafka(row.to_dict())
-                count += 1
-                if count >= limit: break
-            
-            if count >= limit: break
-            print(f"  [CSV] Mensajes enviados: {count}")
-            self.producer.poll(0)
+        # Columnas necesarias
+        cols = ['FlightDate', 'Airline', 'Origin', 'Dest', 'Cancelled', 'DepDelay', 'Distance',
+                'Year', 'Quarter', 'Month', 'DayofMonth', 'DayOfWeek', 
+                'Marketing_Airline_Network', 'OriginCityName', 'OriginState', 
+                'DestCityName', 'DestState', 'AirTime', 'Diverted']
+        
+        ctx = SerializationContext(self.topic, MessageField.VALUE)
+        
+        try:
+            for batch in parquet_file.iter_batches(batch_size=5000, columns=cols):
+                df = batch.to_pandas()
+                
+                # Conversiones Rápidas
+                df['FlightDate'] = df['FlightDate'].astype('int64') // 1000 # Micros -> Millis
+                df['Cancelled'] = df['Cancelled'].astype(int)
+                df['Diverted'] = df['Diverted'].astype(int)
+                
+                # Manejo eficiente de nulos
+                # DepDelay y AirTime son float, si son NaN los pasamos a None
+                df = df.where(pd.notnull(df), None)
+                
+                records = df.to_dict('records')
+                
+                for record in records:
+                    # Serializar y Enviar
+                    # La primera vez registra el esquema, luego usa cache (muy rápido)
+                    val_bytes = self.serializer(record, ctx)
+                    self.producer.produce(topic=self.topic, value=val_bytes)
+                    
+                    count += 1
+                    if limit and count >= limit: break
+                
+                # Poll asíncrono para liberar buffer
+                self.producer.poll(0)
+                
+                total_batches += 1
+                if total_batches % 10 == 0:
+                     elapsed = time.time() - start_time
+                     print(f"  Sent {count} rows... Rate: {count/elapsed:.0f} rec/s")
 
+                if limit and count >= limit: break
+
+        except KeyboardInterrupt:
+            print("\nStopping ingestion...")
+        
+        print("\nFlushing producer...")
         self.producer.flush()
-        return count, time.time() - start_time
-
-    def _send_to_kafka(self, record):
-        """Serializa en JSON y envía. Mucho más sencillo para depurar la fase inicial."""
-        # Limpieza de nulos de Pandas (NaN -> None) que en JSON se convierte a null
-        cleaned_record = {k: (None if pd.isna(v) else v) for k, v in record.items()}
         
-        # En JSON, el timestamp-micros lo enviamos como el número largo directamente
-        json_payload = json.dumps(cleaned_record)
-        
-        self.producer.produce(
-            self.topic, 
-            value=json_payload.encode('utf-8'), 
-            callback=self._delivery_report
-        )
-
-def run_benchmark():
-    producer = FlightProducer()
-    parquet_path = "data/raw/Combined_Flights_2022.parquet"
-    csv_path = "data/raw/flights_sample.csv"
-    limit = 20000 # Probamos con 20k para que sea rápido pero significativo
-    
-    # 1. Benchmark Parquet
-    p_count, p_time = producer.produce_parquet(parquet_path, limit=limit)
-    
-    # 2. Benchmark CSV
-    c_count, c_time = producer.produce_csv(csv_path, limit=limit)
-    
-    print("\n" + "="*40)
-    print("      RESULTADOS DEL BENCHMARK")
-    print("="*40)
-    print(f"PARQUET: {p_count} filas en {p_time:.2f}s ({p_count/p_time:.2f} rec/s)")
-    print(f"CSV:     {c_count} filas en {c_time:.2f}s ({c_count/c_time:.2f} rec/s)")
-    print("="*40)
+        duration = time.time() - start_time
+        print(f"DONE: {count} rows in {duration:.2f}s ({count/duration:.0f} rec/s)")
 
 if __name__ == "__main__":
-    run_benchmark()
+    producer = FlightRegistryProducer()
+    # Ingestar 500,000 registros para una buena prueba de carga
+    producer.produce_from_parquet("data/raw/Combined_Flights_2022.parquet", limit=500000)
