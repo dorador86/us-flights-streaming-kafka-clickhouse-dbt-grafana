@@ -40,8 +40,9 @@ class FlightProducer:
         # Iteramos por batches de 1000 filas
         for batch in parquet_file.iter_batches(batch_size=1000):
             df = batch.to_pandas()
-            # Limpieza básica para Avro
-            df['FlightDate'] = df['FlightDate'].astype('int64') // 1000
+            # En Parquet, pandas suele leerlo como datetime64[us] o [ns]
+            # Basado en nuestras pruebas, viene en microsegundos (16 dígitos)
+            df['FlightDate'] = df['FlightDate'].astype('int64')
             
             for _, row in df.iterrows():
                 self._send_to_kafka(row.to_dict())
@@ -64,7 +65,8 @@ class FlightProducer:
         # Leemos en trozos de 1000
         for chunk in pd.read_csv(file_path, chunksize=1000):
             # Adaptamos FlightDate (en CSV suele ser String)
-            chunk['FlightDate'] = pd.to_datetime(chunk['FlightDate']).astype('int64') // 10**6
+            # En CSV viene como string, pasamos a datetime y luego a MICROsegundos (// 10**3)
+            chunk['FlightDate'] = pd.to_datetime(chunk['FlightDate']).astype('int64') // 10**3
             
             for _, row in chunk.iterrows():
                 self._send_to_kafka(row.to_dict())

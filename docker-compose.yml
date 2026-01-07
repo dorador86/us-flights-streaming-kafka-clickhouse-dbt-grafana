@@ -39,6 +39,10 @@ services:
     ports:
       - "8123:8123"
       - "9000:9000"
+    environment:
+      - CLICKHOUSE_DB=flights
+      - CLICKHOUSE_USER=admin
+      - CLICKHOUSE_PASSWORD=admin
     ulimits:
       nofile:
         soft: 262144
@@ -76,12 +80,15 @@ services:
       - "3000:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-clickhouse-datasource
     deploy:
       resources:
         limits:
           memory: 256M
     networks:
       - flights_net
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
 
 networks:
   flights_net:
