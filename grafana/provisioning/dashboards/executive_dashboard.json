@@ -355,7 +355,7 @@
             "targets": [
                 {
                     "queryType": "sql",
-                    "rawSql": "SELECT airline, sum(leve_delays) as \"Leve (<15min)\", sum(moderado_delays) as \"Moderado (15-45min)\", sum(critico_delays) as \"Crítico (>45min)\" FROM analytics.gold_airline_daily GROUP BY airline ORDER BY sum(critico_delays) DESC LIMIT 10",
+                    "rawSql": "SELECT airline, round((sum(leve_delays) / sum(total_flights)) * 100, 2) as \"Leve %\", round((sum(moderado_delays) / sum(total_flights)) * 100, 2) as \"Moderado %\", round((sum(critico_delays) / sum(total_flights)) * 100, 2) as \"Crítico %\" FROM analytics.gold_airline_daily GROUP BY airline ORDER BY \"Crítico %\" DESC LIMIT 10",
                     "refId": "A",
                     "datasource": {
                         "type": "grafana-clickhouse-datasource",
@@ -363,7 +363,7 @@
                     }
                 }
             ],
-            "title": "Top 10 Aerolíneas por Severidad de Retrasos",
+            "title": "Top 10 Aerolíneas por Severidad de Retrasos (%)",
             "type": "barchart"
         },
         {
