@@ -498,11 +498,9 @@
                 },
                 "pieType": "pie",
                 "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
+                    "calcs": [],
                     "fields": "",
-                    "values": false
+                    "values": true
                 },
                 "tooltip": {
                     "mode": "single",
