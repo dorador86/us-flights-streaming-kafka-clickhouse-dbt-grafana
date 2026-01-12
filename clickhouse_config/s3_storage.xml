@@ -1,0 +1,19 @@
+<clickhouse>
+    <storage_configuration>
+        <disks>
+            <s3_disk>
+                <type>s3</type>
+                <endpoint>https://us-flights-streaming-kafka-clickhouse-dbt-grafana.s3.amazonaws.com/clickhouse_data/</endpoint>
+            </s3_disk>
+        </disks>
+        <policies>
+            <s3_main>
+                <volumes>
+                    <main>
+                        <disk>s3_disk</disk>
+                    </main>
+                </volumes>
+            </s3_main>
+        </policies>
+    </storage_configuration>
+</clickhouse>

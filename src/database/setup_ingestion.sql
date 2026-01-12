@@ -1,14 +1,15 @@
--- CONFIGURACIÓN FINAL: Vuelos con Avro Confluent + Schema Registry
+-- CONFIGURACIÓN COMPLETA: Vuelos + Benchmarks
 CREATE DATABASE IF NOT EXISTS flights;
+CREATE DATABASE IF NOT EXISTS analytics;
 
--- Limpiamos todo para asegurar una prueba limpia de rendimiento
+-- Limpieza
 DROP TABLE IF EXISTS flights.flights_mv;
 DROP TABLE IF EXISTS flights.flights_queue;
--- Opcional: TRUNCATE TABLE flights.flights_raw; -- Si quieres empezar de cero en Grafana
-TRUNCATE TABLE flights.flights_raw;
+DROP TABLE IF EXISTS flights.flights_raw;
+DROP TABLE IF EXISTS analytics.ingestion_benchmarks;
 
--- 1. Tabla Final (OLAP) - Optimizada para consultas
-CREATE TABLE IF NOT EXISTS flights.flights_raw (
+-- 1. Tabla Final de Vuelos (OLAP)
+CREATE TABLE flights.flights_raw (
     FlightDate Date32,
     Airline String,
     Origin String,
@@ -29,7 +30,8 @@ CREATE TABLE IF NOT EXISTS flights.flights_raw (
     AirTime Nullable(Float32),
     Diverted Bool
 ) ENGINE = MergeTree 
-ORDER BY (FlightDate, Airline, Origin);
+ORDER BY (FlightDate, Airline, Origin)
+SETTINGS storage_policy = 's3_main';
 
 -- 2. Tabla Kafka (Cola de Ingesta)
 CREATE TABLE flights.flights_queue (
@@ -37,7 +39,7 @@ CREATE TABLE flights.flights_queue (
     Airline String,
     Origin String,
     Dest String,
-    Cancelled Int32, -- Avro int -> Bool en MV
+    Cancelled Int32,
     DepDelay Nullable(Float32),
     Distance Float32,
     Year Int32,
@@ -51,35 +53,35 @@ CREATE TABLE flights.flights_queue (
     DestCityName String,
     DestState String,
     AirTime Nullable(Float32),
-    Diverted Int32 -- Avro int -> Bool en MV
+    Diverted Int32
 ) ENGINE = Kafka
 SETTINGS 
     kafka_broker_list = 'kafka:9092',
     kafka_topic_list = 'flights_avro_pro',
-    kafka_group_name = 'flights_registry_group_v1',
+    kafka_group_name = 'final_ingestion_group',
     kafka_format = 'AvroConfluent',
     format_avro_schema_registry_url = 'http://schema-registry:8081';
 
--- 3. Materialized View (Transformación y Carga)
+-- 3. Materialized View
 CREATE MATERIALIZED VIEW flights.flights_mv TO flights.flights_raw AS
 SELECT
     toDate32(fromUnixTimestamp64Milli(FlightDate)) AS FlightDate,
-    Airline,
-    Origin,
-    Dest,
+    Airline, Origin, Dest,
     toBool(Cancelled) AS Cancelled,
-    DepDelay,
-    Distance,
-    Year,
-    Quarter,
-    Month,
-    DayofMonth,
-    DayOfWeek,
-    Marketing_Airline_Network,
-    OriginCityName,
-    OriginState,
-    DestCityName,
-    DestState,
-    AirTime,
+    DepDelay, Distance,
+    Year, Quarter, Month, DayofMonth, DayOfWeek,
+    Marketing_Airline_Network, OriginCityName, OriginState,
+    DestCityName, DestState, AirTime,
     toBool(Diverted) AS Diverted
 FROM flights.flights_queue;
+
+-- 4. Tabla de Benchmarks (Para Grafana)
+CREATE TABLE analytics.ingestion_benchmarks (
+    test_id String,
+    format String,
+    records UInt64,
+    duration_seconds Float64,
+    avg_rps Float64,
+    timestamp DateTime
+) ENGINE = MergeTree
+ORDER BY timestamp;

@@ -22,11 +22,17 @@ services:
       - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
       - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
       # Optimización JVM para baja memoria
-      - KAFKA_HEAP_OPTS=-Xmx800M -Xms800M
+      - KAFKA_HEAP_OPTS=-Xmx600M -Xms600M
+      # Retención MUY agresiva (5 min) para benchmarks masivos
+      - KAFKA_LOG_DIRS=/var/lib/kafka/data
+      - KAFKA_LOG_RETENTION_MS=300000
+      - KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS=60000
+      - KAFKA_LOG_RETENTION_BYTES=536870912
+      - KAFKA_LOG_SEGMENT_BYTES=104857600
     deploy:
       resources:
         limits:
-          memory: 1000M
+          memory: 800M
     volumes:
       - kafka_data:/var/lib/kafka/data
     networks:
@@ -66,10 +72,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1500M
+          memory: 1200M
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ./clickhouse_schemas:/var/lib/clickhouse/format_schemas
+      - ./clickhouse_config/s3_storage.xml:/etc/clickhouse-server/config.d/s3_storage.xml
     networks:
       - flights_net
 
@@ -85,7 +92,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 128M
     networks:
       - flights_net
 
