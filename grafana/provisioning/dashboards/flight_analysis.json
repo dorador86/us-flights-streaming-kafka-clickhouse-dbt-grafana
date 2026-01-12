@@ -1,69 +1,177 @@
 {
   "uid": "flight-analytics",
   "title": "✈️ Flight Analysis Dashboard",
-  "tags": ["flights", "analytics"],
+  "tags": [
+    "flights",
+    "analytics"
+  ],
   "timezone": "browser",
   "refresh": "5s",
   "panels": [
     {
       "title": "Total Flights",
       "type": "stat",
-      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
-      "targets": [{ 
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
           "queryType": "sql",
-          "rawSql": "SELECT count() FROM flights.flights_raw WHERE FlightDate >= toDate($__from/1000) AND FlightDate <= toDate($__to/1000)", 
-          "refId": "A", 
-          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "ef9a3d1zo8hs0c" } 
-      }],
-      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center" }
+          "rawSql": "SELECT sum(total_flights) FROM analytics.gold_airline_daily WHERE flight_date >= toDate($__from/1000) AND flight_date <= toDate($__to/1000)",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "ef9a3d1zo8hs0c"
+          }
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center"
+      }
     },
     {
       "title": "Avg Delay (Min)",
       "type": "stat",
-      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 0 },
-      "targets": [{ 
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 0
+      },
+      "targets": [
+        {
           "queryType": "sql",
-          "rawSql": "SELECT avg(DepDelay) FROM flights.flights_raw WHERE DepDelay > 0 AND FlightDate >= toDate($__from/1000) AND FlightDate <= toDate($__to/1000)", 
-          "refId": "A", 
-          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "ef9a3d1zo8hs0c" } 
-      }],
-      "fieldConfig": { "defaults": { "unit": "m", "decimals": 1, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }, { "value": 15, "color": "orange" }, { "value": 30, "color": "red" }] } } }
+          "rawSql": "SELECT sum(avg_dep_delay * total_flights) / sum(total_flights) FROM analytics.gold_airline_daily WHERE flight_date >= toDate($__from/1000) AND flight_date <= toDate($__to/1000)",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "ef9a3d1zo8hs0c"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m",
+          "decimals": 1,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 15,
+                "color": "orange"
+              },
+              {
+                "value": 30,
+                "color": "red"
+              }
+            ]
+          }
+        }
+      }
     },
     {
       "title": "Cancellation Rate",
       "type": "stat",
-      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 0 },
-      "targets": [{ 
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "targets": [
+        {
           "queryType": "sql",
-          "rawSql": "SELECT (countIf(Cancelled = 1) * 100 / count()) FROM flights.flights_raw WHERE FlightDate >= toDate($__from/1000) AND FlightDate <= toDate($__to/1000)", 
-          "refId": "A", 
-          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "ef9a3d1zo8hs0c" } 
-      }],
-      "fieldConfig": { "defaults": { "unit": "percent", "decimals": 2, "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 5 }] } } }
+          "rawSql": "SELECT (sum(cancelled_flights) * 100 / sum(total_flights)) FROM analytics.gold_airline_daily WHERE flight_date >= toDate($__from/1000) AND flight_date <= toDate($__to/1000)",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "ef9a3d1zo8hs0c"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        }
+      }
     },
     {
       "title": "Daily Traffic Volume",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 6 },
-      "targets": [{ 
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "targets": [
+        {
           "queryType": "sql",
-          "rawSql": "SELECT toStartOfDay(FlightDate) as time, count() as flights FROM flights.flights_raw WHERE FlightDate >= toDate($__from/1000) AND FlightDate <= toDate($__to/1000) GROUP BY time ORDER BY time", 
-          "refId": "A", 
-          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "ef9a3d1zo8hs0c" } 
-      }],
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+          "rawSql": "SELECT toStartOfDay(flight_date) as time, sum(total_flights) as flights FROM analytics.gold_airline_daily WHERE flight_date >= toDate($__from/1000) AND flight_date <= toDate($__to/1000) GROUP BY time ORDER BY time",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "ef9a3d1zo8hs0c"
+          }
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
     },
     {
       "title": "Top Airlines (Total Flights)",
       "type": "barchart",
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 14 },
-      "targets": [{ 
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "targets": [
+        {
           "queryType": "sql",
-          "rawSql": "SELECT Airline, count() as Total FROM flights.flights_raw WHERE FlightDate >= toDate($__from/1000) AND FlightDate <= toDate($__to/1000) GROUP BY Airline ORDER BY Total DESC LIMIT 10", 
-          "refId": "A", 
-          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "ef9a3d1zo8hs0c" } 
-      }],
-      "options": { "orientation": "horizontal", "showValue": "always", "stacking": "none" }
+          "rawSql": "SELECT replaceAll(replaceAll(replaceAll(airline, ' Air Lines Inc.', ''), ' Aka Champlain Enterprises, Inc.', ''), ' d/b/a United Express', '') as Airline, sum(total_flights) as Total FROM analytics.gold_airline_daily WHERE flight_date >= toDate($__from/1000) AND flight_date <= toDate($__to/1000) GROUP BY Airline ORDER BY Total DESC LIMIT 10",
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "ef9a3d1zo8hs0c"
+          }
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "always",
+        "stacking": "none"
+      }
     }
   ],
   "schemaVersion": 36,

@@ -355,7 +355,7 @@
             "targets": [
                 {
                     "queryType": "sql",
-                    "rawSql": "SELECT airline, countIf(cancelled_flights > 0) as \"Cancelado\", sum(leve_delays) as \"Leve <15min\", sum(moderado_delays) as \"Moderado 15-45min\", sum(critico_delays) as \"Crítico >45min\" FROM analytics.gold_airline_daily GROUP BY airline ORDER BY sum(critico_delays) DESC LIMIT 10",
+                    "rawSql": "SELECT concat(replaceAll(replaceAll(replaceAll(airline, ' Air Lines Inc.', ''), ' Aka Champlain Enterprises, Inc.', ''), ' d/b/a United Express', ''), ' (N=', toString(sum(total_flights)), ')') as airline_with_total, (sum(on_time_flights) / sum(total_flights)) * 100 as \"En Tiempo %\", (sum(leve_delays) / sum(total_flights)) * 100 as \"Leve %\", (sum(moderado_delays) / sum(total_flights)) * 100 as \"Moderado %\", (sum(critico_delays) / sum(total_flights)) * 100 as \"Crítico %\", (sum(cancelled_flights) / sum(total_flights)) * 100 as \"Cancelado %\" FROM analytics.gold_airline_daily GROUP BY airline ORDER BY \"Crítico %\" DESC LIMIT 10",
                     "refId": "A",
                     "datasource": {
                         "type": "grafana-clickhouse-datasource",

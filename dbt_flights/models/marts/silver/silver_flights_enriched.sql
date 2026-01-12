@@ -9,7 +9,9 @@ select
     
     -- Calcula la Gravedad del Retraso
     case
-        when dep_delay <= 15 then 'Leve'
+        when is_cancelled = 1 then 'Cancelado'
+        when dep_delay <= 0 then 'On-Time' 
+        when dep_delay > 0 and dep_delay <= 15 then 'Leve'
         when dep_delay > 15 and dep_delay <= 45 then 'Moderado'
         when dep_delay > 45 then 'Critico'
         else 'Sin Datos'
