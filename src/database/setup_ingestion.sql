@@ -1,81 +1,88 @@
--- CONFIGURACIÓN COMPLETA: Vuelos + Benchmarks
+-- CONFIGURACIÓN SLIM: 11 Columnas Esenciales + DLQ
 CREATE DATABASE IF NOT EXISTS flights;
 CREATE DATABASE IF NOT EXISTS analytics;
 
 -- Limpieza
 DROP TABLE IF EXISTS flights.flights_mv;
+DROP VIEW IF EXISTS flights.flights_errors_mv;
+DROP TABLE IF EXISTS flights.flights_errors;
 DROP TABLE IF EXISTS flights.flights_queue;
 DROP TABLE IF EXISTS flights.flights_raw;
 DROP TABLE IF EXISTS analytics.ingestion_benchmarks;
 
--- 1. Tabla Final de Vuelos (OLAP)
+-- 1. Tabla Final de Vuelos (OLAP) - SOLO 11 COLUMNAS
 CREATE TABLE flights.flights_raw (
     FlightDate Date32,
     Airline String,
+    Tail_Number Nullable(String),
     Origin String,
     Dest String,
     Cancelled Bool,
+    Diverted Bool,
     DepDelay Nullable(Float32),
-    Distance Float32,
-    Year Int32,
-    Quarter Int32,
-    Month Int32,
-    DayofMonth Int32,
-    DayOfWeek Int32,
-    Marketing_Airline_Network String,
-    OriginCityName String,
-    OriginState String,
-    DestCityName String,
-    DestState String,
+    ArrDelay Nullable(Float32),
     AirTime Nullable(Float32),
-    Diverted Bool
+    Distance Float32
 ) ENGINE = MergeTree 
 ORDER BY (FlightDate, Airline, Origin)
 SETTINGS storage_policy = 's3_main';
 
--- 2. Tabla Kafka (Cola de Ingesta)
+-- 2. Tabla DEAD LETTER QUEUE
+CREATE TABLE flights.flights_errors (
+    topic String,
+    partition Int64,
+    offset Int64,
+    raw_message String,
+    error_message String,
+    timestamp DateTime DEFAULT now()
+) ENGINE = MergeTree
+ORDER BY timestamp;
+
+-- 3. Tabla Kafka (Cola de Ingesta)
 CREATE TABLE flights.flights_queue (
     FlightDate Int64,
     Airline String,
+    Tail_Number Nullable(String),
     Origin String,
     Dest String,
     Cancelled Int32,
+    Diverted Int32,
     DepDelay Nullable(Float32),
-    Distance Float32,
-    Year Int32,
-    Quarter Int32,
-    Month Int32,
-    DayofMonth Int32,
-    DayOfWeek Int32,
-    Marketing_Airline_Network String,
-    OriginCityName String,
-    OriginState String,
-    DestCityName String,
-    DestState String,
+    ArrDelay Nullable(Float32),
     AirTime Nullable(Float32),
-    Diverted Int32
+    Distance Float32
 ) ENGINE = Kafka
 SETTINGS 
     kafka_broker_list = 'kafka:9092',
     kafka_topic_list = 'flights_avro_pro',
     kafka_group_name = 'final_ingestion_group',
     kafka_format = 'AvroConfluent',
-    format_avro_schema_registry_url = 'http://schema-registry:8081';
+    format_avro_schema_registry_url = 'http://schema-registry:8081',
+    kafka_handle_error_mode = 'stream';
 
--- 3. Materialized View
+-- 4. Materialized View para ERRORES (DLQ)
+CREATE MATERIALIZED VIEW flights.flights_errors_mv TO flights.flights_errors AS
+SELECT
+    _topic as topic,
+    _partition as partition,
+    _offset as offset,
+    _raw_message as raw_message,
+    _error as error_message
+FROM flights.flights_queue
+WHERE _error != '';
+
+-- 5. Materialized View para DATOS OK
 CREATE MATERIALIZED VIEW flights.flights_mv TO flights.flights_raw AS
 SELECT
-    toDate32(fromUnixTimestamp64Milli(FlightDate)) AS FlightDate,
-    Airline, Origin, Dest,
+    toDate32(fromUnixTimestamp(FlightDate)) AS FlightDate,
+    Airline, Tail_Number, Origin, Dest,
     toBool(Cancelled) AS Cancelled,
-    DepDelay, Distance,
-    Year, Quarter, Month, DayofMonth, DayOfWeek,
-    Marketing_Airline_Network, OriginCityName, OriginState,
-    DestCityName, DestState, AirTime,
-    toBool(Diverted) AS Diverted
-FROM flights.flights_queue;
+    toBool(Diverted) AS Diverted,
+    DepDelay, ArrDelay, AirTime, Distance
+FROM flights.flights_queue
+WHERE _error = '';
 
--- 4. Tabla de Benchmarks (Para Grafana)
+-- 6. Tabla de Benchmarks
 CREATE TABLE analytics.ingestion_benchmarks (
     test_id String,
     format String,

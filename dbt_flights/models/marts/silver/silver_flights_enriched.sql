@@ -1,7 +1,23 @@
-{{ config(materialized='table') }}
+{{ config(
+    materialized='materialized_view',
+    engine='MergeTree()',
+    order_by='(flight_date, airline, origin)'
+) }}
 
 with flight_data as (
-    select * from {{ ref('stg_flights') }}
+    select 
+        FlightDate as flight_date,
+        Airline as airline,
+        Tail_Number as tail_number,
+        Origin as origin,
+        Dest as dest,
+        Cancelled as is_cancelled,
+        Diverted as is_diverted,
+        if(isFinite(DepDelay), DepDelay, NULL) as dep_delay,
+        if(isFinite(ArrDelay), ArrDelay, NULL) as arr_delay,
+        if(isFinite(AirTime), AirTime, NULL) as air_time,
+        Distance as distance
+    from {{ source('flights_source', 'flights_raw') }}
 )
 
 select
@@ -21,9 +37,13 @@ select
     case 
         when air_time > 0 then (distance / (air_time / 60))
         else 0 
-    end as speed_mph
+    end as speed_mph,
 
-    -- TODO: Recovery Efficiency calculation requires ArrDelay, which is currently missing from ingestion.
-    -- , (dep_delay - arr_delay) as time_recovered
+    case
+        when dep_delay > 0 and arr_delay is not null then (dep_delay - arr_delay)
+        else 0
+    end as time_recovered,
+    
+    now() as processed_at
     
 from flight_data

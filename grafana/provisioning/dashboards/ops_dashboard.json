@@ -68,7 +68,7 @@
             "targets": [
                 {
                     "queryType": "sql",
-                    "rawSql": "SELECT timestamp as time, avg_rps FROM analytics.ingestion_benchmarks ORDER BY time DESC LIMIT 1",
+                    "rawSql": "SELECT timestamp as time, avg_rps as speed FROM analytics.ingestion_benchmarks ORDER BY time DESC LIMIT 1",
                     "refId": "A"
                 }
             ],
@@ -186,7 +186,7 @@
                             }
                         ]
                     },
-                    "unit": "short"
+                    "unit": "none"
                 }
             },
             "gridPos": {

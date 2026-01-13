@@ -28,7 +28,7 @@
             },
             "id": 20,
             "panels": [],
-            "title": "KPIs Globales (Business Overview)",
+            "title": "Global KPIs (Business Overview)",
             "type": "row"
         },
         {
@@ -49,7 +49,8 @@
                                 "value": null
                             }
                         ]
-                    }
+                    },
+                    "unit": "none"
                 },
                 "overrides": []
             },
@@ -75,7 +76,7 @@
             "targets": [
                 {
                     "queryType": "sql",
-                    "rawSql": "SELECT sum(total_flights) FROM analytics.gold_airline_daily",
+                    "rawSql": "SELECT count() FROM flights.flights_raw",
                     "refId": "A",
                     "datasource": {
                         "type": "grafana-clickhouse-datasource",
@@ -83,7 +84,7 @@
                     }
                 }
             ],
-            "title": "Total Vuelos (Histórico)",
+            "title": "Current DB Rows",
             "type": "stat"
         },
         {
@@ -139,7 +140,7 @@
             "targets": [
                 {
                     "queryType": "sql",
-                    "rawSql": "SELECT avg(avg_dep_delay) FROM analytics.gold_airline_daily WHERE isFinite(avg_dep_delay)",
+                    "rawSql": "SELECT sum(tot_dep_delay) / sum(total_flights) as avg_delay FROM analytics.gold_airline_daily",
                     "refId": "A",
                     "datasource": {
                         "type": "grafana-clickhouse-datasource",
@@ -147,7 +148,7 @@
                     }
                 }
             ],
-            "title": "Retraso Promedio (min)",
+            "title": "Avg Departure Delay (min)",
             "type": "stat"
         },
         {
@@ -199,7 +200,7 @@
             "targets": [
                 {
                     "queryType": "sql",
-                    "rawSql": "SELECT (sum(cancelled_flights) / sum(total_flights)) * 100 FROM analytics.gold_airline_daily",
+                    "rawSql": "SELECT if(isNaN((sum(cancelled_flights) / sum(total_flights)) * 100), 0, (sum(cancelled_flights) / sum(total_flights)) * 100) as value FROM analytics.gold_airline_daily",
                     "refId": "A",
                     "datasource": {
                         "type": "grafana-clickhouse-datasource",
@@ -207,7 +208,7 @@
                     }
                 }
             ],
-            "title": "Tasa de Cancelación",
+            "title": "Cancellation Rate",
             "type": "stat"
         },
         {
@@ -259,7 +260,7 @@
             "targets": [
                 {
                     "queryType": "sql",
-                    "rawSql": "SELECT max(max_dep_delay) FROM analytics.gold_airline_daily",
+                    "rawSql": "SELECT max(max_dep_delay) as max_delay FROM analytics.gold_airline_daily",
                     "refId": "A",
                     "datasource": {
                         "type": "grafana-clickhouse-datasource",
@@ -267,7 +268,7 @@
                     }
                 }
             ],
-            "title": "Peor Retraso (min)",
+            "title": "Worst Delay (min)",
             "type": "stat"
         },
         {
@@ -280,7 +281,7 @@
             },
             "id": 22,
             "panels": [],
-            "title": "Desempeño por Aerolínea (Deep Dive)",
+            "title": "Airline Performance (Deep Dive)",
             "type": "row"
         },
         {
@@ -355,7 +356,7 @@
             "targets": [
                 {
                     "queryType": "sql",
-                    "rawSql": "SELECT concat(replaceAll(replaceAll(replaceAll(airline, ' Air Lines Inc.', ''), ' Aka Champlain Enterprises, Inc.', ''), ' d/b/a United Express', ''), ' (N=', toString(sum(total_flights)), ')') as airline_with_total, (sum(on_time_flights) / sum(total_flights)) * 100 as \"En Tiempo %\", (sum(leve_delays) / sum(total_flights)) * 100 as \"Leve %\", (sum(moderado_delays) / sum(total_flights)) * 100 as \"Moderado %\", (sum(critico_delays) / sum(total_flights)) * 100 as \"Crítico %\", (sum(cancelled_flights) / sum(total_flights)) * 100 as \"Cancelado %\" FROM analytics.gold_airline_daily GROUP BY airline ORDER BY \"Crítico %\" DESC LIMIT 10",
+                    "rawSql": "SELECT concat(replaceAll(replaceAll(replaceAll(airline, ' Air Lines Inc.', ''), ' Aka Champlain Enterprises, Inc.', ''), ' d/b/a United Express', ''), ' (N=', toString(sum(total_flights)), ')') as airline_with_total, (sum(on_time_flights) / sum(total_flights)) * 100 as \"On-Time %\", (sum(leve_delays) / sum(total_flights)) * 100 as \"Minor %\", (sum(moderado_delays) / sum(total_flights)) * 100 as \"Moderate %\", (sum(critico_delays) / sum(total_flights)) * 100 as \"Critical %\", (sum(cancelled_flights) / sum(total_flights)) * 100 as \"Cancelled %\" FROM analytics.gold_airline_daily GROUP BY airline ORDER BY \"Critical %\" DESC LIMIT 10",
                     "refId": "A",
                     "datasource": {
                         "type": "grafana-clickhouse-datasource",
@@ -363,7 +364,7 @@
                     }
                 }
             ],
-            "title": "Top 10 Aerolíneas por Severidad de Retrasos (%)",
+            "title": "Top 10 Airlines by Delay Severity (%)",
             "type": "barchart"
         },
         {
@@ -376,7 +377,7 @@
             },
             "id": 24,
             "panels": [],
-            "title": "Análisis de Congestión en Aeropuertos",
+            "title": "Airport Congestion Analysis",
             "type": "row"
         },
         {
@@ -451,7 +452,7 @@
             "targets": [
                 {
                     "queryType": "sql",
-                    "rawSql": "SELECT airport_code, avg(avg_dep_delay) as \"Avg Delay (min)\" FROM analytics.gold_airport_daily GROUP BY airport_code ORDER BY \"Avg Delay (min)\" DESC LIMIT 10",
+                    "rawSql": "SELECT airport_code, sum(tot_dep_delay) / sum(total_departures) as delay FROM analytics.gold_airport_daily GROUP BY airport_code HAVING sum(total_departures) > 5000 ORDER BY delay DESC LIMIT 10",
                     "refId": "A",
                     "datasource": {
                         "type": "grafana-clickhouse-datasource",
@@ -459,7 +460,7 @@
                     }
                 }
             ],
-            "title": "Top 10 Aeropuertos con Mayor Retraso Promedio",
+            "title": "Top 10 Airports with Highest Avg Delay",
             "type": "barchart"
         },
         {
@@ -518,7 +519,7 @@
                     }
                 }
             ],
-            "title": "Top 5 Aeropuertos con Más Tráfico (Share)",
+            "title": "Top 5 Airports by Traffic Share",
             "type": "piechart"
         }
     ],
@@ -534,8 +535,8 @@
         "list": []
     },
     "time": {
-        "from": "2022-04-01T00:00:00.000Z",
-        "to": "2022-05-01T00:00:00.000Z"
+        "from": "now-5y",
+        "to": "now"
     },
     "timepicker": {
         "refresh_intervals": [
@@ -549,5 +550,5 @@
     "timezone": "browser",
     "title": "Executive Flight Dashboard",
     "uid": "executive_dashboard",
-    "version": 4
+    "version": 5
 }
