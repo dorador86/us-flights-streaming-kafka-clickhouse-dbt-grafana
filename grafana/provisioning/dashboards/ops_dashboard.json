@@ -309,11 +309,21 @@
             "targets": [
                 {
                     "queryType": "sql",
-                    "rawSql": "SELECT event_time as time, CurrentMetric_MemoryTracking FROM system.metric_log WHERE event_time >= $__fromTime",
-                    "refId": "A"
+                    "rawSql": "SELECT event_time as time, sumIf(value, metric = 'OSMemoryTotal') - sumIf(value, metric = 'OSMemoryAvailable') as val FROM system.asynchronous_metric_log WHERE event_time >= $__fromTime AND metric IN ('OSMemoryTotal', 'OSMemoryAvailable') GROUP BY time ORDER BY time",
+                    "refId": "System Total"
+                },
+                {
+                    "queryType": "sql",
+                    "rawSql": "SELECT event_time as time, CurrentMetric_MemoryTracking as val FROM system.metric_log WHERE event_time >= $__fromTime ORDER BY time",
+                    "refId": "ClickHouse"
+                },
+                {
+                    "queryType": "sql",
+                    "rawSql": "SELECT timestamp as time, mem_rss as val FROM analytics.process_metrics WHERE timestamp >= $__fromTime ORDER BY time",
+                    "refId": "Python Ingestor"
                 }
             ],
-            "title": "Peak RAM Usage",
+            "title": "Peak RAM Usage (System vs Process)",
             "type": "stat"
         },
         {

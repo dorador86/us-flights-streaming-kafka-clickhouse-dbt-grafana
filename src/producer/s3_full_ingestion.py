@@ -2,7 +2,8 @@ import pandas as pd
 import pyarrow.dataset as ds
 import s3fs
 import time
-import multiprocessing as mp
+import queue
+import threading
 from confluent_kafka import Producer
 from confluent_kafka.schema_registry import SchemaRegistryClient
 from confluent_kafka.schema_registry.avro import AvroSerializer
@@ -10,9 +11,8 @@ from confluent_kafka.serialization import SerializationContext, MessageField
 import clickhouse_connect
 
 # ==========================================
-# CONFIGURACIÓN DE ALTO RENDIMIENTO (ULTRA)
+# CONFIGURACIÓN STREAMING PURO (K.I.S.S.)
 # ==========================================
-WORKERS = 2
 BOOTSTRAP_SERVERS = 'localhost:29092'
 REGISTRY_URL = 'http://localhost:8081'
 TOPIC = 'flights_avro_pro'
@@ -48,139 +48,112 @@ SCHEMA_STR = """
 }
 """
 
-def producer_worker(records_chunk):
-    """Worker optimizado para serializar y enviar a Kafka en paralelo"""
-    if not records_chunk: return 0
-    
-    registry_client = SchemaRegistryClient({'url': REGISTRY_URL})
-    serializer = AvroSerializer(registry_client, SCHEMA_STR, lambda obj, ctx: obj)
-    
-    producer = Producer({
-        'bootstrap.servers': BOOTSTRAP_SERVERS,
-        'linger.ms': 150,
-        'batch.size': 2097152,  # 2MB
-        'compression.type': 'lz4',
-        'acks': '1',
-        'queue.buffering.max.messages': 1000000,
-        'queue.buffering.max.kbytes': 1048576,
-        'message.max.bytes': 2097152
-    })
-    
-    ctx = SerializationContext(TOPIC, MessageField.VALUE)
-    count = 0
-    
-    for record in records_chunk:
-        while True:
-            try:
-                val_bytes = serializer(record, ctx)
-                producer.produce(topic=TOPIC, value=val_bytes)
-                break
-            except BufferError:
-                producer.poll(0.05)
-        
-        count += 1
-        if count % 20000 == 0:
-            producer.poll(0)
-            
-    producer.flush()
-    return count
-
-class S3FullIngestionUltra:
-    def __init__(self, bucket_name):
-        self.bucket_name = bucket_name
+class S3StreamingIngestion:
+    def __init__(self):
         self.s3 = s3fs.S3FileSystem(anon=False)
-        self.ch_client = clickhouse_connect.get_client(host='localhost', username='admin', password='admin')
+        self.data_queue = queue.Queue(maxsize=10) # Cola de 10 bloques (buffer)
+        self.stop_event = threading.Event()
+        
+        # Configuración Kafka (La de oro)
+        self.producer = Producer({
+            'bootstrap.servers': BOOTSTRAP_SERVERS,
+            'linger.ms': 100, 
+            'batch.size': 1048576, # 1MB
+            'compression.type': 'lz4',
+            'acks': '1',
+            'queue.buffering.max.messages': 500000,
+        })
+        
+        registry_client = SchemaRegistryClient({'url': REGISTRY_URL})
+        self.serializer = AvroSerializer(registry_client, SCHEMA_STR, lambda obj, ctx: obj)
+        self.ctx = SerializationContext(TOPIC, MessageField.VALUE)
 
-    def reset_database(self):
-        """Limpia las tablas MergeTree para una ingesta limpia"""
-        try:
-            print(">>> Limpiando tablas de ClickHouse...")
-            mt_tables = self.ch_client.query("SELECT concat(database, '.', name) FROM system.tables WHERE engine = 'MergeTree' AND database IN ('flights', 'analytics')")
-            for row in mt_tables.result_rows:
-                self.ch_client.command(f"TRUNCATE TABLE {row[0]}")
-            print("✓ Base de datos lista.")
-        except Exception as e:
-            print(f"! Error reseteando DB: {e}")
+    def reader_thread(self, files):
+        """Hilo dedicado solo a leer de S3 y alimentar la cola"""
+        print("📖 [Reader] Iniciando lectura en background...")
+        
+        for s3_path in files:
+            print(f"📖 [Reader] Abriendo: {s3_path.split('/')[-1]} ...")
+            try:
+                dataset = ds.dataset(s3_path, filesystem=self.s3, format="parquet")
+                cols = ['FlightDate', 'Airline', 'Tail_Number', 'Origin', 'Dest', 'Cancelled', 'DepDelay', 'ArrDelay', 'Distance',
+                        'Year', 'Quarter', 'Month', 'DayofMonth', 'DayOfWeek', 
+                        'Marketing_Airline_Network', 'OriginCityName', 'OriginState', 
+                        'DestCityName', 'DestState', 'AirTime', 'Diverted']
+                
+                # Leemos en trozos de 100k para fluidez
+                for batch in dataset.to_batches(columns=cols, batch_size=100000):
+                    if self.stop_event.is_set(): break
+                    
+                    df = batch.to_pandas()
+                    # Transformaciones ligeras
+                    df['FlightDate'] = pd.to_datetime(df['FlightDate']).values.astype('datetime64[s]').astype('int64')
+                    df['Cancelled'] = df['Cancelled'].astype(int)
+                    df['Diverted'] = df['Diverted'].astype(int)
+                    df = df.where(pd.notnull(df), None)
+                    
+                    records = df.to_dict('records')
+                    self.data_queue.put(records) # Bloquea si la cola está llena (backpressure natural)
+                    
+            except Exception as e:
+                print(f"⚠️ [Reader] Error leyendo archivo: {e}")
+        
+        # Señal de fin
+        self.data_queue.put(None)
+        print("📖 [Reader] Lectura finalizada.")
 
-    def process_file_parallel(self, s3_path, pool):
-        """Procesa un archivo Parquet usando paralelismo de workers"""
-        print(f"-> Procesando: {s3_path}")
+    def run_ingestion(self):
+        # 1. Detectar Archivos
+        with open('.last_bucket_name', 'r') as f: bucket = f.read().strip()
+        files = [
+            f"{bucket}/raw/flights/year=2018/Combined_Flights_2018.parquet",
+            f"{bucket}/raw/flights/year=2019/Combined_Flights_2019.parquet",
+            f"{bucket}/raw/flights/year=2020/Combined_Flights_2020.parquet",
+            f"{bucket}/raw/flights/year=2021/Combined_Flights_2021.parquet",
+            f"{bucket}/raw/flights/year=2022/Combined_Flights_2022.parquet"
+        ]
+
+        # 2. Arrancar Hilo Lector
+        t = threading.Thread(target=self.reader_thread, args=(files,))
+        t.start()
+        
+        # 3. Main Loop (Productor)
+        print("🚀 [Main] Iniciando Productor Kafka Continuo...")
+        total_sent = 0
         start_time = time.time()
         
-        dataset = ds.dataset(s3_path, filesystem=self.s3, format="parquet")
-        cols = ['FlightDate', 'Airline', 'Tail_Number', 'Origin', 'Dest', 'Cancelled', 'DepDelay', 'ArrDelay', 'Distance',
-                'Year', 'Quarter', 'Month', 'DayofMonth', 'DayOfWeek', 
-                'Marketing_Airline_Network', 'OriginCityName', 'OriginState', 
-                'DestCityName', 'DestState', 'AirTime', 'Diverted']
+        produce = self.producer.produce
+        poll = self.producer.poll
         
-        file_rows = 0
-        # Cargamos el archivo por fragmentos grandes para no saturar memoria pero dar trabajo a los workers
-        for batch in dataset.to_batches(columns=cols, batch_size=200000):
-            df = batch.to_pandas()
-            
-            # Pre-procesado vectorizado (Rápido en el hilo principal)
-            df['FlightDate'] = pd.to_datetime(df['FlightDate']).values.astype('datetime64[s]').astype('int64')
-            df['Cancelled'] = df['Cancelled'].astype(int)
-            df['Diverted'] = df['Diverted'].astype(int)
-            df = df.where(pd.notnull(df), None)
-            
-            records = df.to_dict('records')
-            
-            # Dividir el lote entre los workers
-            chunk_size = len(records) // WORKERS
-            if chunk_size == 0: chunks = [records]
-            else: chunks = [records[i:i + chunk_size] for i in range(0, len(records), chunk_size)]
-            
-            # Mandar a los workers
-            results = pool.map(producer_worker, chunks)
-            file_rows += sum(results)
-            
-        duration = time.time() - start_time
-        print(f"✓ {s3_path} completado: {file_rows:,} registros ({file_rows/duration:.0f} rec/s)")
-        return file_rows
-
-    def run(self):
-        print(f"🚀 INGESTA MASIVA ULTRA (Paralelismo: {WORKERS} workers)")
-        self.reset_database()
-        
-        search_path = f"{self.bucket_name}/raw/flights/"
-        all_files = sorted(self.s3.glob(f"{search_path}**/*.parquet"))
-        
-        if not all_files:
-            print("! No se encontraron archivos Parquet.")
-            return
-
-        grand_total = 0
-        overall_start = time.time()
-        
-        # Usamos un Pool de procesos persistente para toda la ingesta
-        with mp.Pool(processes=WORKERS) as pool:
-            for file_path in all_files:
-                rows = self.process_file_parallel(file_path, pool)
-                grand_total += rows
-                print(f"--- Progreso total: {grand_total:,} registros ---\n")
-                
-        duration = time.time() - overall_start
-        avg_rps = grand_total / duration
-
-        print("\n" + "="*50)
-        print("🎉 INGESTA MASIVA COMPLETADA")
-        print(f"Total Registros: {grand_total:,}")
-        print(f"Tiempo Total: {duration/60:.2f} minutos")
-        print(f"Velocidad Media: {avg_rps:.0f} rec/s")
-        print("="*50)
-
-        # Registro final en ClickHouse
         try:
-            self.ch_client.command(f"""
-                INSERT INTO analytics.ingestion_benchmarks (test_id, format, records, duration_seconds, avg_rps, timestamp)
-                VALUES ('full_ingestion_ultra', 's3_ultra_parallel', {grand_total}, {duration}, {avg_rps}, now())
-            """)
-        except: pass
+            while True:
+                records = self.data_queue.get()
+                if records is None: break # Fin de datos
+                
+                for i, record in enumerate(records):
+                    try:
+                        produce(topic=TOPIC, value=self.serializer(record, self.ctx))
+                    except BufferError:
+                        poll(0.1)
+                        produce(topic=TOPIC, value=self.serializer(record, self.ctx))
+                    
+                    # Poll ligero para callbacks
+                    if i % 10000 == 0:
+                        poll(0)
+                        
+                total_sent += len(records)
+                if total_sent % 100000 == 0:
+                     print(f"📈 [Main] Enviados: {total_sent:,} (Cola: {self.data_queue.qsize()})")
+
+        except KeyboardInterrupt:
+            print("\n🛑 Deteniendo...")
+            self.stop_event.set()
+            
+        t.join()
+        self.producer.flush()
+        
+        duration = time.time() - start_time
+        print(f"\n🎉 INGESTA FINALIZADA: {total_sent:,} registros en {duration:.1f}s")
 
 if __name__ == "__main__":
-    with open('.last_bucket_name', 'r') as f:
-        bucket = f.read().strip()
-    
-    ingestor = S3FullIngestionUltra(bucket)
-    ingestor.run()
+    S3StreamingIngestion().run_ingestion()

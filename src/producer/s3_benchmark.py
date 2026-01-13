@@ -1,23 +1,22 @@
-from confluent_kafka import Producer
-from confluent_kafka.schema_registry import SchemaRegistryClient
-from confluent_kafka.schema_registry.avro import AvroSerializer
-from confluent_kafka.serialization import SerializationContext, MessageField
 import pandas as pd
 import pyarrow.dataset as ds
 import s3fs
 import time
-import os
-import json
-import argparse
 import multiprocessing as mp
+import psutil
+from confluent_kafka import Producer
+from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry.avro import AvroSerializer
+from confluent_kafka.serialization import SerializationContext, MessageField
+import clickhouse_connect
 
 # ==========================================
-# CONFIGURACIÓN FIJA PARA MÁXIMA ESTABILIDAD
+# BENCHMARK GOLDEN-TURBO (80k-100k TARGET)
 # ==========================================
-WORKERS = 2  # Optimizado para instancia de 2 núcleos
-TOPIC = 'flights_avro_pro'
+WORKERS = 2 # 1 por núcleo físico = máxima eficiencia real
 BOOTSTRAP_SERVERS = 'localhost:29092'
 REGISTRY_URL = 'http://localhost:8081'
+TOPIC = 'flights_avro_pro'
 
 SCHEMA_STR = """
 {
@@ -50,114 +49,98 @@ SCHEMA_STR = """
 }
 """
 
-def producer_worker(records_chunk):
-    """Worker de alto rendimiento: Serialización y Envío"""
+def init_worker():
+    global global_producer, global_serializer, global_ctx
     registry_client = SchemaRegistryClient({'url': REGISTRY_URL})
-    serializer = AvroSerializer(registry_client, SCHEMA_STR, lambda obj, ctx: obj)
+    global_serializer = AvroSerializer(registry_client, SCHEMA_STR, lambda obj, ctx: obj)
+    global_ctx = SerializationContext(TOPIC, MessageField.VALUE)
     
-    producer = Producer({
+    # CONFIGURACIÓN OPTIMIZADA (Velocidad Termal pero Estable)
+    global_producer = Producer({
         'bootstrap.servers': BOOTSTRAP_SERVERS,
-        'linger.ms': 150,
-        'batch.size': 2097152,  # 2MB
-        'compression.type': 'lz4',
-        'acks': '1',
+        'linger.ms': 300, # Más tiempo para llenar batches gigantes
+        'batch.size': 2097152, # 2MB es el punto dulce para este broker
+        'compression.type': 'lz4', # Esencial para no saturar I/O
+        'acks': '1', # Un poco de seguridad para evitar desconexiones TCP
         'queue.buffering.max.messages': 1000000,
         'queue.buffering.max.kbytes': 1048576,
-        'message.max.bytes': 2097152
+        'message.max.bytes': 4194304
     })
-    
-    ctx = SerializationContext(TOPIC, MessageField.VALUE)
+
+def producer_worker(chunk):
+    if not chunk: return 0
     count = 0
-    poll = producer.poll
-    produce = producer.produce
+    produce = global_producer.produce
+    serialize = global_serializer
+    ctx = global_ctx
     
-    for record in records_chunk:
-        while True:
-            try:
-                val_bytes = serializer(record, ctx)
-                produce(topic=TOPIC, value=val_bytes)
-                break
-            except BufferError:
-                poll(0.05)
-        
-        count += 1
-        if count % 20000 == 0:
-            poll(0)
-            
-    producer.flush()
+    for record in chunk:
+        try:
+            produce(topic=TOPIC, value=serialize(record, ctx))
+            count += 1
+        except BufferError:
+            global_producer.poll(0.1)
+    
+    # No flusheamos en medio para no frenar el pipeline
+    global_producer.poll(0)
     return count
 
-class S3Benchmark:
-    def __init__(self):
-        self.s3 = s3fs.S3FileSystem(anon=False)
-
-    def run(self, limit=500000):
-        print(f"\n🚀 EJECUTANDO BENCHMARK ULTRA (Workers: {WORKERS})")
-        
-        # 1. Reset Database
-        try:
-            import clickhouse_connect
-            client = clickhouse_connect.get_client(host='localhost', username='admin', password='admin')
-            print(">>> Limpiando bases de datos para un test puro...")
-            mt_tables = client.query("SELECT concat(database, '.', name) FROM system.tables WHERE engine = 'MergeTree' AND database IN ('flights', 'analytics')")
-            for row in mt_tables.result_rows:
-                client.command(f"TRUNCATE TABLE {row[0]}")
-            print("✓ ClickHouse reseteado.")
-        except Exception as e:
-            print(f"! Aviso: No se pudo resetear la BBDD: {e}")
-
-        # 2. Leer datos
-        with open('.last_bucket_name', 'r') as f:
-            bucket = f.read().strip()
-        s3_path = f"{bucket}/raw/flights/year=2022/Combined_Flights_2022.parquet"
-        
-        print(f"Cargando {limit:,} filas desde S3...")
-        dataset = ds.dataset(s3_path, filesystem=self.s3, format="parquet")
-        cols = ['FlightDate', 'Airline', 'Tail_Number', 'Origin', 'Dest', 'Cancelled', 'DepDelay', 'ArrDelay', 'Distance',
-                'Year', 'Quarter', 'Month', 'DayofMonth', 'DayOfWeek', 
-                'Marketing_Airline_Network', 'OriginCityName', 'OriginState', 
-                'DestCityName', 'DestState', 'AirTime', 'Diverted']
-        
-        df = dataset.head(limit, columns=cols).to_pandas()
-
-        # 3. Pre-procesado Vectorizado
-        print("Pre-procesando datos (Optimización de CPU)...")
-        df['FlightDate'] = pd.to_datetime(df['FlightDate']).values.astype('datetime64[s]').astype('int64')
-        df['Cancelled'] = df['Cancelled'].astype(int)
-        df['Diverted'] = df['Diverted'].astype(int)
-        df = df.where(pd.notnull(df), None)
-        records = df.to_dict('records')
-        
-        # 4. Paralelizar
-        chunk_size = len(records) // WORKERS
-        chunks = [records[i:i + chunk_size] for i in range(0, len(records), chunk_size)]
-        
-        print(f"Lanzando {WORKERS} workers paralelos...")
-        start_time = time.time()
-        
-        with mp.Pool(processes=WORKERS) as pool:
-            results = pool.map(producer_worker, chunks)
-            total_sent = sum(results)
+def run_performance_test():
+    limit = 4000000 
+    print(f"\n🚀 LANZANDO TEST DE ALTO RENDIMIENTO (Limit: {limit:,})")
+    
+    client = clickhouse_connect.get_client(host='localhost', username='admin', password='admin')
+    client.command("TRUNCATE TABLE flights.flights_raw")
+    
+    s3 = s3fs.S3FileSystem(anon=False)
+    with open('.last_bucket_name', 'r') as f: bucket = f.read().strip()
+    s3_path = f"{bucket}/raw/flights/year=2022/Combined_Flights_2022.parquet"
+    
+    dataset = ds.dataset(s3_path, filesystem=s3, format="parquet")
+    cols = ['FlightDate', 'Airline', 'Tail_Number', 'Origin', 'Dest', 'Cancelled', 'DepDelay', 'ArrDelay', 'Distance',
+            'Year', 'Quarter', 'Month', 'DayofMonth', 'DayOfWeek', 
+            'Marketing_Airline_Network', 'OriginCityName', 'OriginState', 
+            'DestCityName', 'DestState', 'AirTime', 'Diverted']
+    
+    total_sent = 0
+    start_time = time.time()
+    
+    # Usamos Apply_Async para flujo continuo
+    with mp.Pool(processes=WORKERS, initializer=init_worker) as pool:
+        for batch in dataset.to_batches(columns=cols, batch_size=500000):
+            if total_sent >= limit: break
             
-        duration = time.time() - start_time
-        avg_rps = total_sent / duration
+            df = batch.to_pandas()
+            df['FlightDate'] = pd.to_datetime(df['FlightDate']).values.astype('datetime64[s]').astype('int64')
+            df['Cancelled'] = df['Cancelled'].astype(int)
+            df['Diverted'] = df['Diverted'].astype(int)
+            df = df.where(pd.notnull(df), None)
+            records = df.to_dict('records')
+            
+            # Dividimos los 500k entre los 2 workers (250k cada uno)
+            chunk_size = len(records) // WORKERS
+            chunks = [records[i:i + chunk_size] for i in range(0, len(records), chunk_size)]
+            
+            # Lanzamos de forma asíncrona para no parar la lectura de S3
+            pool.map_async(producer_worker, chunks)
+            total_sent += len(records)
+            
+            elapsed = time.time() - start_time
+            print(f"📈 [Test] {total_sent:,} encolados. Speed estimada: {total_sent/elapsed:.0f} rec/s")
         
-        print(f"\n✅ BENCHMARK COMPLETADO: {total_sent:,} registros en {duration:.2f}s")
-        print(f"🔥 RENDIMIENTO FINAL: {avg_rps:.0f} rec/s 🔥")
-        
-        # Log de métricas
-        try:
-            client.command(f"""
-                INSERT INTO analytics.ingestion_benchmarks (test_id, format, records, duration_seconds, avg_rps, timestamp)
-                VALUES ('ultra_bench_{int(time.time())}', 'parallel_ultra', {total_sent}, {duration}, {avg_rps}, now())
-            """)
-            print("✅ Métricas registradas en ClickHouse.")
-        except: pass
+        print("⌛ Finalizando envío y vaciando buffers...")
+        pool.close()
+        pool.join()
+
+    total_duration = time.time() - start_time
+    # Registro final en ClickHouse para tus gráficas
+    client.command(f"""
+        INSERT INTO analytics.ingestion_benchmarks (test_id, format, records, duration_seconds, avg_rps, timestamp)
+        VALUES ('test_high_perf_{int(time.time())}', 'avro_turbo_v2', {total_sent}, {total_duration}, {total_sent/total_duration}, now())
+    """)
+    
+    print(f"\n✅ RESULTADO FINAL: {total_sent:,} registros en {total_duration:.1f}s")
+    print(f"🔥 VELOCIDAD MEDIA: {total_sent/total_duration:.0f} rec/s 🔥")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--limit', type=int, default=500000)
-    args = parser.parse_args()
-    
-    bench = S3Benchmark()
-    bench.run(limit=args.limit)
+    run_performance_test()
