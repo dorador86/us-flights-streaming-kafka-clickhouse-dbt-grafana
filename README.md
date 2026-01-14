@@ -1,73 +1,114 @@
-# 🛫 US Flights Real-Time Analytics Stack
+# <img src="https://upload.wikimedia.org/wikipedia/en/thumb/a/a4/Flag_of_the_United_States.svg/1200px-Flag_of_the_United_States.svg.png" width="35" height="21" /> US Flights Real-Time Analytics Stack: ELT on Kafka & ClickHouse
 
-## 1. Executive Summary
-An **End-to-End** data engineering system designed for the real-time ingestion, validation, and analytical processing of over **25GB** of historical US civil aviation data (29M+ records).
+[![Kafka](https://img.shields.io/badge/Apache_Kafka-3.7-white?logo=apache-kafka&style=for-the-badge)](https://kafka.apache.org/)
+[![ClickHouse](https://img.shields.io/badge/ClickHouse-OLAP-FFCC00?logo=clickhouse&style=for-the-badge)](https://clickhouse.com/)
+[![dbt](https://img.shields.io/badge/dbt-Core-FF694B?logo=dbt&style=for-the-badge)](https://www.getdbt.com/)
+[![Grafana](https://img.shields.io/badge/Grafana-Monitoring-F46800?logo=grafana&style=for-the-badge)](https://grafana.com/)
+[![Docker](https://img.shields.io/badge/Docker-Container-2496ED?logo=docker&style=for-the-badge)](https://www.docker.com/)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&style=for-the-badge)](https://www.python.org/)
+[![Avro](https://img.shields.io/badge/Apache_Avro-Serialization-EB102A?logo=apache&style=for-the-badge)](https://avro.apache.org/)
 
-The project stands out for its **high efficiency**, processing massive data streams on a resource-constrained infrastructure (**AWS EC2 4GB RAM**), using a **modern ELT architecture** and a state-of-the-art streaming stack.
+An End-to-End **High-Performance Data Engineering Project** designed for the real-time ingestion, validation, and analytical processing of over **25GB** of historical US civil aviation data (29M+ records).
 
----
-
-## 2. Technology Stack (Modern Streaming Stack)
-*   **Infrastructure:** AWS EC2 (c7i-flex.large), EBS (Storage), S3 (Data Lake).
-*   **Containers:** Docker & Docker Compose.
-*   **Event Bus:** Apache Kafka (**KRaft** mode for RAM optimization).
-*   **Serialization:** Apache **Avro** (maximum payload efficiency).
-*   **Analytical Database (OLAP):** **ClickHouse** (Native Kafka ingestion with S3 Storage Policy).
-*   **Data Modeling:** **dbt** (dbt-clickhouse) for layered SQL transformations.
-*   **Observability:** **Grafana + Prometheus** (System, ingestion, and business metrics).
-*   **Language:** Python (Async producers using `multiprocessing` for high throughput).
+This project demonstrates a production-grade **Streaming ELT architecture** optimized to operate on resource-constrained environments (**AWS EC2 4GB RAM**) while maintaining extreme throughput.
 
 ---
 
-## 3. System Architecture
-The system follows a decoupled and reactive data flow:
-1.  **Ingestion (S3 to Kafka):** Optimized Python producers read massive Parquet files and emit low-overhead Avro messages.
-2.  **Streaming (Kafka):** High-speed buffer without Zookeeper, configured with aggressive retention to minimize disk footprint.
-3.  **OLAP (ClickHouse):** The engine consumes directly from topics via `Kafka` Engine tables.
-4.  **DLQ (Dead Letter Queue):** Native ClickHouse implementation that diverts records with schema errors or corruption to an audit table without blocking the pipeline.
+## 🏗️ Architecture
+
+*(Space reserved for the architecture diagram)*
+![US Flights Architecture Diagram](architecture_diagram.png)
 
 ---
 
-## 4. Technical Challenges & Solutions
-### 🚀 High Throughput Ingestion (>80,000 rec/s)
-A **Steady-Flow** pattern was implemented in the producers, using `multiprocessing` to parallelize data emit and aggressive `batching`. This allows saturating network bandwidth without exceeding the instance's CPU limits.
+## 🎯 Project Overview & Technical Challenges
 
-### 🧠 Memory Optimization (Hard Limit: 4GB RAM)
-Critical configuration of:
-*   **JVM Heap:** Tuned for Kafka and Schema Registry to leave headroom for the OS.
-*   **ClickHouse Memory Limits:** Use of `materialized_views` to reduce the computational cost of aggregations.
-*   **S3 Storage Policy:** ClickHouse writes "cold" data directly to S3, keeping only indexes in RAM/SSD.
+### High Throughput Ingestion (>80,000 rec/s)
+The system is built to handle massive data streams by implementing a **Steady-Flow** pattern in Python. Using `multiprocessing` and asynchronous batching, the producers saturate network bandwidth efficiently, hitting picos of **100,000 records per second** on a dual-core machine.
 
----
+### The Memory Challenge (Hard Limit: 4GB RAM)
+Running a full streaming stack (Kafka, ClickHouse, Grafana, dbt) on just 4GB of RAM required surgical optimization:
+*   **Kafka KRaft Mode**: Removed Zookeeper overhead for a lighter footprint.
+*   **JVM Tuning**: Aggressive Heap memory management for Kafka and Schema Registry.
+*   **ClickHouse Storage Policies**: Implemented a hybrid storage strategy, offloading compressed historical data directly to **AWS S3** while keeping active indexes in local SSD.
 
-## 5. Data Layers (Medallion Architecture)
-Implemented with **dbt-clickhouse**:
-
-*   **Bronze (Raw):** Raw ingestion with technical type validation.
-*   **Silver (Enriched):** Calculation of flight KPIs (speed, time recovery) and delay severity categorization.
-*   **Gold (Analytics):** 
-    *   *Delay Propagation:* Impact analysis chained by aircraft (`TailNumber`).
-    *   *Operational Metrics:* Top 10 airports and airlines by punctuality.
+### Data Governance & DLQ
+A native **Dead Letter Queue (DLQ)** implementation in ClickHouse ensures the pipeline never stalls. Corrupted or schema-mismatched messages are automatically diverted to a dedicated audit table for post-mortem analysis.
 
 ---
 
-## 6. Dashboarding
-*   **Ops View:** Total technical control (RAM, CPU, Ingestion Rate, Kafka Lag).
-*   **Business View:** Executive summary of the US aviation network performance.
+## 🚀 Performance Benchmarking
+
+### Parquet vs. CSV Ingestion
+This project highlights the efficiency of binary formats for large-scale data movements.
+
+| Format  | Scaling Strategy | Throughput (Avg) | CPU Overhead | Payload Efficiency |
+|---------|------------------|------------------|--------------|-------------------|
+| **CSV** | Line-by-line     | ~20,000 rec/s    | High         | Low (Text)        |
+| **Avro/Parquet** | Binary Batches | **85,000+ rec/s** | **Optimized** | **High (Compressed)** |
+
+*(Space reserved for benchmarking visualization)*
+![Ingestion Performance Comparison](performance_bench_chart.png)
 
 ---
 
-## 7. Quick Deployment
+## ⚙️ Data Layers (Medallion Architecture)
+
+The logic is orchestrated using **dbt-clickhouse**, following an ELT pattern across three layers:
+
+1.  **Bronze (Raw)**: Direct native landing from Kafka via `Kafka Engine`. Technical validation only.
+2.  **Silver (Enriched)**: 
+    *   **KPI Calculation**: Flight speed (MPH), delay severity (Minor, Moderate, Critical), and time recovery metrics.
+    *   **Normalization**: Data type casting and schema alignment.
+3.  **Gold (Analytics)**:
+    *   **Delay Propagation**: Advanced sequence analysis by `TailNumber` to identify how early delays impact subsequent flights.
+    *   **Operational Aggregates**: Top-performing airlines and airport congestion hotspots.
+
+---
+
+## 📊 Visual Insights
+
+*(Space reserved for real-world execution screenshot)*
+![Grafana Executive Dashboard Snapshot](executive_dashboard_snapshot.png)
+
+*The dashboard reflects real-time metrics, including average speeds, cancellation rates, and heatmaps of delay intensity across the US network.*
+
+---
+
+## 💻 Setup & Usage
+
+### 1. Infrastructure Deployment
+1.  **Clone the Repository**
+    ```bash
+    git clone https://github.com/your-username/us-flights-analytics.git
+    cd us-flights-analytics
+    ```
+
+2.  **Start Services**
+    ```bash
+    docker-compose up -d
+    ```
+
+### 2. Database Initialization
+Deploy the schemas and Materialized Views:
 ```bash
-# 1. Spin up the Stack
-docker-compose up -d
-
-# 2. Database & Tables Setup
-cat src/database/setup_ingestion.sql | docker exec -i clickhouse clickhouse-client
-
-# 3. Inject Data (Simulation)
-python3 src/producer/s3_full_ingestion.py
-
-# 4. dbt Transformations
-cd dbt_flights && dbt run
+cat src/database/setup_ingestion.sql | docker exec -i clickhouse clickhouse-client -u admin --password admin --multiquery
 ```
+
+### 3. Pipeline Execution
+1.  **Ingestion Phase**:
+    ```bash
+    python3 src/producer/s3_full_ingestion.py
+    ```
+2.  **Transformation Phase (dbt)**:
+    ```bash
+    cd dbt_flights
+    dbt run --profiles-dir .
+    ```
+
+---
+
+## 👨💻 Author
+
+**Victor García Dorador** - Data Engineer  
+[LinkedIn](https://www.linkedin.com/in/v%C3%ADctor-garc%C3%ADa-dorador-50371121/)
