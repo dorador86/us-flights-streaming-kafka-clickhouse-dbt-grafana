@@ -8,51 +8,64 @@
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&style=for-the-badge)](https://www.python.org/)
 [![Avro](https://img.shields.io/badge/Apache_Avro-Serialization-EB102A?logo=apache&style=for-the-badge)](https://avro.apache.org/)
 
-An End-to-End **High-Performance Data Engineering Project** designed for the real-time ingestion, validation, and analytical processing of over **25GB** of historical US civil aviation data (29M+ records).
+## 🎯 Project Objective: Full-Scale Analytical Pipeline
 
-This project demonstrates a production-grade **Streaming ELT architecture** optimized to operate on resource-constrained environments (**AWS EC2 4GB RAM**) while maintaining extreme throughput.
+The primary goal of this project is the **end-to-end processing of 29 Million flight records** (2018-2022 dataset). The challenge was to build a production-ready streaming stack capable of handling this volume with real-time analytics, while restricted to a **4GB RAM** environment.
 
 ---
 
 ## 🏗️ Architecture
 
-*(Space reserved for the architecture diagram)*
 ![US Flights Architecture Diagram](architecture_diagram.png)
 
 ---
 
-## 🎯 Project Overview & Technical Challenges
+## ⚙️ Key Technical Pillars
 
-### High Throughput Ingestion (>80,000 rec/s)
-The system is built to handle massive data streams by implementing a **Steady-Flow** pattern in Python. Using `multiprocessing` and asynchronous batching, the producers saturate network bandwidth efficiently, hitting picos of **100,000 records per second** on a dual-core machine.
+### 1. High-Velocity Ingestor (>80,000 rec/s)
+Developed a high-performance Python producer implementing the **Steady-Flow** pattern. By utilizing `multiprocessing` and Avro binary serialization, the system achieves extreme throughput, saturating the ingestion pipeline without overwhelming the limited CPU/RAM resources.
 
-### The Memory Challenge (Hard Limit: 4GB RAM)
-Running a full streaming stack (Kafka, ClickHouse, Grafana, dbt) on just 4GB of RAM required surgical optimization:
-*   **Kafka KRaft Mode**: Removed Zookeeper overhead for a lighter footprint.
-*   **JVM Tuning**: Aggressive Heap memory management for Kafka and Schema Registry.
-*   **ClickHouse Storage Policies**: Implemented a hybrid storage strategy, offloading compressed historical data directly to **AWS S3** while keeping active indexes in local SSD.
+### 2. Infrastructure Optimization (4GB RAM Limit)
+Operating a multi-container stack (Kafka, ClickHouse, Grafana, Schema Registry) on a single `c7i-flex.large` instance required:
+*   **Kafka KRaft**: Zero-dependency coordination.
+*   **JVM Minification**: Tailored heap limits for schema management.
+*   **S3 Storage Policy**: ClickHouse offloads compressed historical data to **AWS S3**, reserving local disk for active hot-data.
 
-### Data Governance & DLQ
-A native **Dead Letter Queue (DLQ)** implementation in ClickHouse ensures the pipeline never stalls. Corrupted or schema-mismatched messages are automatically diverted to a dedicated audit table for post-mortem analysis.
-
----
-
-## 🚀 Performance Benchmarking
-
-### Parquet vs. CSV Ingestion
-This project highlights the efficiency of binary formats for large-scale data movements.
-
-| Format  | Scaling Strategy | Throughput (Avg) | CPU Overhead | Payload Efficiency |
-|---------|------------------|------------------|--------------|-------------------|
-| **CSV** | Line-by-line     | ~20,000 rec/s    | High         | Low (Text)        |
-| **Avro/Parquet** | Binary Batches | **85,000+ rec/s** | **Optimized** | **High (Compressed)** |
-
-*(Space reserved for benchmarking visualization)*
-![Ingestion Performance Comparison](performance_bench_chart.png)
+### 3. Native Data Governance (DLQ)
+Equipped with a **Dead Letter Queue (DLQ)** implemented directly via ClickHouse Materialized Views. This ensures that any schema mismatch or corrupted data is diverted for audit without stopping the main ingestion stream.
 
 ---
 
-## ⚙️ Data Layers (Medallion Architecture)
+## � Design Decisions & Preliminary Benchmarks
+
+Before the full 29M record execution, a **preliminary design phase** was conducted to select the most efficient data format. 
+
+Using a **500,000 record test set**, we compared traditional CSV ingestion against Avro/Parquet. The results justified using binary formats to achieve a 4x throughput increase with significantly lower CPU overhead.
+
+| Strategy | Speed (Avg) | Resource Usage | Decision |
+|----------|-------------|----------------|----------|
+| CSV (Row-based) | ~20,000 rec/s | High CPU | Rejected |
+| **Avro (Binary Batch)** | **85,000+ rec/s** | **Optimized** | **Selected** |
+
+![Benchmark Comparison Chart](preliminary_benchmark_chart.png)
+
+---
+
+## 📊 Full-Scale Production Results (29 Million Records)
+
+This section showcases the definitive execution of the entire dataset.
+
+### **I. System Health & Performance (Ops Dashboard)**
+*Captures the sustained ingestion speed, peak flush rates, and cluster resource stability during the 29M record stream.*
+![Ops Dashboard Snapshot](ops_dashboard_final_snapshot.png)
+
+### **II. Business Insights (Executive Dashboard)**
+*Aggregated analytics from the Gold Layer, highlighting airline performance, delay types, and congestion trends across the US.*
+![Executive Dashboard Snapshot](executive_dashboard_snapshot.png)
+
+---
+
+## 📂 Data Layers (Medallion Architecture)
 
 The logic is orchestrated using **dbt-clickhouse**, following an ELT pattern across three layers:
 
