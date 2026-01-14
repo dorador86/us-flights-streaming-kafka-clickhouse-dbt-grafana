@@ -10,7 +10,7 @@
 
 ## 🎯 Project Objective: Full-Scale Analytical Pipeline
 
-The primary goal of this project is the **end-to-end processing of 29 Million flight records** (2018-2022 dataset). The challenge was to build a production-ready streaming stack capable of handling this volume with real-time analytics, while restricted to a **4GB RAM** environment.
+The primary goal of this project is the **end-to-end processing of 29 Million flight records** from the [US Flight Delay Dataset (2018-2022)](https://www.kaggle.com/datasets/robikscube/flight-delay-dataset-20182022/) available on Kaggle. The challenge was to build a production-ready streaming stack capable of handling this volume with real-time analytics, while restricted to a **4GB RAM** environment.
 
 ---
 
@@ -25,10 +25,18 @@ The primary goal of this project is the **end-to-end processing of 29 Million fl
 ### 1. High-Velocity Ingestor (>37,000 rec/s)
 Developed a high-performance Python producer implementing the **Steady-Flow** pattern. By utilizing `multiprocessing` and Avro binary serialization, the system achieves extreme throughput, saturating the ingestion pipeline without overwhelming the limited CPU/RAM resources.
 
-### 2. Infrastructure Optimization (4GB RAM Limit)
-Operating a multi-container stack (Kafka, ClickHouse, Grafana, Schema Registry) on a single `c7i-flex.large` instance required:
-*   **Kafka KRaft**: Zero-dependency coordination.
-*   **JVM Minification**: Tailored heap limits for schema management.
+### 2. Infrastructure Optimization (**c7i-flex.large** Constraints)
+Operating a multi-container stack (Kafka, ClickHouse, Grafana, Schema Registry) on a single **AWS EC2 c7i-flex.large** instance was a core engineering challenge.
+
+**Hardware Specs:**
+*   **CPU:** 2 vCPUs (1 Physical Core, 2 Threads) @ **3.2 GHz** (Intel Sapphire Rapids).
+*   **Memory:** **4 GiB** DDR5 RAM.
+*   **Network:** Up to **12.5 Gbps** bandwidth.
+*   **Storage:** EBS-Optimized (Up to 10,000 Mbps).
+
+**Optimization Strategy:**
+*   **Kafka KRaft**: Zero-dependency coordination to save JVM overhead.
+*   **JVM Minification**: Tailored heap limits for Kafka and Schema Registry to fit within the 4GiB boundary.
 *   **S3 Storage Policy**: ClickHouse offloads compressed historical data to **AWS S3**, reserving local disk for active hot-data.
 
 ### 3. Native Data Governance (DLQ)
@@ -52,8 +60,8 @@ The benchmark revealed that parsing a 1.2GB+ dataset in CSV format created a sev
 #### **Performance Comparison (Grafana Screenshots)**
 *Visual validation of throughput difference using identical hardware resources.*
 
-![Benchmark - CSV Ingestion Throughput](benchmark_csv_grafana.png)
-![Benchmark - Parquet Ingestion Throughput](benchmark_parquet_grafana.png)
+![Benchmark - CSV Ingestion Throughput](benchmark_csv_grafana.jpg)
+![Benchmark - Parquet Ingestion Throughput](benchmark_parquet_grafana.jpg)
 
 ---
 
