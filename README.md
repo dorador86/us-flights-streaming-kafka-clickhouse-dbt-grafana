@@ -22,7 +22,7 @@ The primary goal of this project is the **end-to-end processing of 29 Million fl
 
 ## ⚙️ Key Technical Pillars
 
-### 1. High-Velocity Ingestor (>80,000 rec/s)
+### 1. High-Velocity Ingestor (>37,000 rec/s)
 Developed a high-performance Python producer implementing the **Steady-Flow** pattern. By utilizing `multiprocessing` and Avro binary serialization, the system achieves extreme throughput, saturating the ingestion pipeline without overwhelming the limited CPU/RAM resources.
 
 ### 2. Infrastructure Optimization (4GB RAM Limit)
@@ -40,14 +40,20 @@ Equipped with a **Dead Letter Queue (DLQ)** implemented directly via ClickHouse 
 
 Before the full 29M record execution, a **preliminary design phase** was conducted to select the most efficient data format. 
 
-Using a **500,000 record test set**, we compared traditional CSV ingestion against Avro/Parquet. The results justified using binary formats to achieve a 4x throughput increase with significantly lower CPU overhead.
+Using a **500,000 record test set**, we compared the performance of different **source data formats** (CSV vs. Parquet) being serialized into **Avro** for Kafka ingestion. 
 
-| Strategy | Speed (Avg) | Resource Usage | Decision |
-|----------|-------------|----------------|----------|
-| CSV (Row-based) | ~20,000 rec/s | High CPU | Rejected |
-| **Avro (Binary Batch)** | **85,000+ rec/s** | **Optimized** | **Selected** |
+The benchmark revealed that parsing a 1.2GB+ dataset in CSV format created a severe bottleneck in the Python interpreter. Switching to **Parquet** allowed for vectorized reading of batches, enabling the producer to maintain a stable flow of over 37,100 records per second.
 
-![Benchmark Comparison Chart](preliminary_benchmark_chart.png)
+| Source Format | Ingestion Pattern | Throughput (Avg) | Bottleneck |
+|---------------|-------------------|------------------|------------|
+| CSV           | String Parsing    | ~22,900 rec/s    | CPU (I/O Wait) |
+| **Parquet**   | **Vectorized Load** | **38,300+ rec/s** | **Network Bound** |
+
+#### **Performance Comparison (Grafana Screenshots)**
+*Visual validation of throughput difference using identical hardware resources.*
+
+![Benchmark - CSV Ingestion Throughput](benchmark_csv_grafana.png)
+![Benchmark - Parquet Ingestion Throughput](benchmark_parquet_grafana.png)
 
 ---
 
