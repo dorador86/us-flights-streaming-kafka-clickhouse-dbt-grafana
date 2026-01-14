@@ -12,7 +12,7 @@ import clickhouse_connect
 # ==========================================
 # FULL INGESTION - STEADY-FLOW PATTERN (STABLE)
 # ==========================================
-WORKERS = 2
+WORKERS = 1 # Reduced to 1 for stability
 BOOTSTRAP_SERVERS = 'localhost:29092'
 REGISTRY_URL = 'http://localhost:8081'
 TOPIC = 'flights_avro_pro'
@@ -140,7 +140,7 @@ class S3FullIngestion:
                     df = df.where(pd.notnull(df), None)
                     records = df.to_dict('records')
                     
-                    chunk_size = len(records) // WORKERS
+                    chunk_size = len(records) // WORKERS # Reduced to 1 for maximum stability during final visualization run
                     chunks = [records[i:i + chunk_size] for i in range(0, len(records), chunk_size)]
                     
                     pool.map_async(producer_worker, chunks)
