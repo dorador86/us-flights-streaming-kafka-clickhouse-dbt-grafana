@@ -11,8 +11,8 @@ with ranked_flights as (
         dest,
         dep_delay,
         arr_delay,
-        -- Ordenamos por fecha y (teóricamente por hora si la tuviéramos)
-        -- Usamos el orden de inserción/aparición como proxy en este dataset simplificado
+        -- Order by date and (theoretically by time if we had it)
+        -- We use insertion order/appearance as proxy in this simplified dataset
         row_number() over (partition by tail_number, flight_date order by origin) as flight_sequence
     from {{ ref('silver_flights_enriched') }}
     where tail_number is not null
@@ -28,7 +28,7 @@ select
     f1.arr_delay as initial_arrival_delay,
     f2.origin as second_origin,
     f2.dep_delay as subsequent_departure_delay,
-    -- Si el primer vuelo llegó tarde (>15min) y el segundo salió tarde
+    -- If the first flight arrived late (>15min) and the second left late
     case 
         when f1.arr_delay > 15 and f2.dep_delay > 15 then 1
         else 0

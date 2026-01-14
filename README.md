@@ -1,73 +1,73 @@
 # 🛫 US Flights Real-Time Analytics Stack
 
-## 1. Resumen Ejecutivo (El "Elevator Pitch")
-Sistema de ingeniería de datos **End-to-End** diseñado para la ingesta, validación y análisis analítico en tiempo real de más de **25GB** de datos históricos de aviación civil de EE.UU. (29M+ registros). 
+## 1. Executive Summary
+An **End-to-End** data engineering system designed for the real-time ingestion, validation, and analytical processing of over **25GB** of historical US civil aviation data (29M+ records).
 
-El proyecto destaca por su **alta eficiencia**, procesando flujos masivos de datos en una infraestructura optimizada de recursos limitados (**AWS EC2 4GB RAM**), utilizando una arquitectura **ELT moderna** y un stack de streaming de última generación.
-
----
-
-## 2. Stack Tecnológico (Modern Streaming Stack)
-*   **Infraestructura:** AWS EC2 (c7i-flex.large), EBS (Storage), S3 (Data Lake).
-*   **Contenedores:** Docker & Docker Compose.
-*   **Bus de Eventos:** Apache Kafka (modo **KRaft** para ahorro de RAM).
-*   **Serialización:** Apache **Avro** (máxima eficiencia de payload).
-*   **Base de Datos Analítica (OLAP):** **ClickHouse** (Ingesta nativa de Kafka con S3 Storage Policy).
-*   **Modelado de Datos:** **dbt** (dbt-clickhouse) para transformaciones SQL en capas.
-*   **Observabilidad:** **Grafana + Prometheus** (Métricas de sistema, ingesta y negocio).
-*   **Lenguaje:** Python (Productores asíncronos con `aiokafka` y `multiprocessing`).
+The project stands out for its **high efficiency**, processing massive data streams on a resource-constrained infrastructure (**AWS EC2 4GB RAM**), using a **modern ELT architecture** and a state-of-the-art streaming stack.
 
 ---
 
-## 3. Arquitectura del Sistema
-El sistema sigue un flujo de datos desacoplado y reactivo:
-1.  **Ingesta (S3 to Kafka):** Productores Python optimizados leen archivos Parquet masivos y emiten mensajes Avro de bajo peso.
-2.  **Streaming (Kafka):** Buffer de alta velocidad sin Zookeeper, configurado con retención agresiva para minimizar el footprint de disco.
-3.  **OLAP (ClickHouse):** El motor consume directamente de los tópicos mediante tablas `Kafka` Engine.
-4.  **DLQ (Dead Letter Queue):** Implementación nativa en ClickHouse que desvía registros con errores de esquema o corrupción a una tabla de auditoría sin bloquear el pipeline.
+## 2. Technology Stack (Modern Streaming Stack)
+*   **Infrastructure:** AWS EC2 (c7i-flex.large), EBS (Storage), S3 (Data Lake).
+*   **Containers:** Docker & Docker Compose.
+*   **Event Bus:** Apache Kafka (**KRaft** mode for RAM optimization).
+*   **Serialization:** Apache **Avro** (maximum payload efficiency).
+*   **Analytical Database (OLAP):** **ClickHouse** (Native Kafka ingestion with S3 Storage Policy).
+*   **Data Modeling:** **dbt** (dbt-clickhouse) for layered SQL transformations.
+*   **Observability:** **Grafana + Prometheus** (System, ingestion, and business metrics).
+*   **Language:** Python (Async producers using `multiprocessing` for high throughput).
 
 ---
 
-## 4. Desafíos Técnicos y Soluciones
-### 🚀 Ingesta de Alto Throughput (>80,000 rec/s)
-Se implementó un patrón de **Steady-Flow** en los productores, utilizando `multiprocessing` para paralelizar el envío y `batching` agresivo. Esto permite saturar el ancho de banda sin superar los límites de CPU de la instancia.
-
-### 🧠 Optimización de Memoria (Hard Limit: 4GB RAM)
-Configuración crítica de:
-*   **JVM Heap:** Ajustada para Kafka y Schema Registry para dejar aire al sistema.
-*   **ClickHouse Memory Limits:** Uso de `materialized_views` para reducir el coste computacional de las agregaciones.
-*   **S3 Storage Policy:** ClickHouse escribe los datos "fríos" directamente a S3, manteniendo solo los índices en RAM/SSD.
+## 3. System Architecture
+The system follows a decoupled and reactive data flow:
+1.  **Ingestion (S3 to Kafka):** Optimized Python producers read massive Parquet files and emit low-overhead Avro messages.
+2.  **Streaming (Kafka):** High-speed buffer without Zookeeper, configured with aggressive retention to minimize disk footprint.
+3.  **OLAP (ClickHouse):** The engine consumes directly from topics via `Kafka` Engine tables.
+4.  **DLQ (Dead Letter Queue):** Native ClickHouse implementation that diverts records with schema errors or corruption to an audit table without blocking the pipeline.
 
 ---
 
-## 5. Capas de Datos (Arquitectura Medallón)
-Implementado con **dbt-clickhouse**:
+## 4. Technical Challenges & Solutions
+### 🚀 High Throughput Ingestion (>80,000 rec/s)
+A **Steady-Flow** pattern was implemented in the producers, using `multiprocessing` to parallelize data emit and aggressive `batching`. This allows saturating network bandwidth without exceeding the instance's CPU limits.
 
-*   **Bronze (Raw):** Ingesta cruda con validación de tipo técnica.
-*   **Silver (Enriched):** Cálculo de KPIs de vuelo (velocidad, recuperación de tiempo) y categorización de severidad del retraso.
+### 🧠 Memory Optimization (Hard Limit: 4GB RAM)
+Critical configuration of:
+*   **JVM Heap:** Tuned for Kafka and Schema Registry to leave headroom for the OS.
+*   **ClickHouse Memory Limits:** Use of `materialized_views` to reduce the computational cost of aggregations.
+*   **S3 Storage Policy:** ClickHouse writes "cold" data directly to S3, keeping only indexes in RAM/SSD.
+
+---
+
+## 5. Data Layers (Medallion Architecture)
+Implemented with **dbt-clickhouse**:
+
+*   **Bronze (Raw):** Raw ingestion with technical type validation.
+*   **Silver (Enriched):** Calculation of flight KPIs (speed, time recovery) and delay severity categorization.
 *   **Gold (Analytics):** 
-    *   *Propagación de Retrasos:* Análisis de impacto encadenado por aeronave (`TailNumber`).
-    *   *Métricas Operativas:* Top 10 aeropuertos y aerolíneas por puntualidad.
+    *   *Delay Propagation:* Impact analysis chained by aircraft (`TailNumber`).
+    *   *Operational Metrics:* Top 10 airports and airlines by punctuality.
 
 ---
 
 ## 6. Dashboarding
-*   **Ops View:** Control técnico total (RAM, CPU, Ingestion Rate, Kafka Lag).
-*   **Business View:** Resumen ejecutivo de la red de aviación de EE.UU.
+*   **Ops View:** Total technical control (RAM, CPU, Ingestion Rate, Kafka Lag).
+*   **Business View:** Executive summary of the US aviation network performance.
 
 ---
 
-## 7. Despliegue Rápido
+## 7. Quick Deployment
 ```bash
-# 1. Levantar Stack
+# 1. Spin up the Stack
 docker-compose up -d
 
-# 2. Setup DB & Tables
+# 2. Database & Tables Setup
 cat src/database/setup_ingestion.sql | docker exec -i clickhouse clickhouse-client
 
-# 3. Inyectar Datos (Simulación)
+# 3. Inject Data (Simulation)
 python3 src/producer/s3_full_ingestion.py
 
-# 4. Transformaciones dbt
+# 4. dbt Transformations
 cd dbt_flights && dbt run
 ```

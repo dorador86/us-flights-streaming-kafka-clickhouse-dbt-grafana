@@ -356,7 +356,7 @@
             "targets": [
                 {
                     "queryType": "sql",
-                    "rawSql": "SELECT concat(replaceAll(replaceAll(replaceAll(airline, ' Air Lines Inc.', ''), ' Aka Champlain Enterprises, Inc.', ''), ' d/b/a United Express', ''), ' (N=', toString(sum(total_flights)), ')') as airline_with_total, (sum(on_time_flights) / sum(total_flights)) * 100 as \"On-Time %\", (sum(leve_delays) / sum(total_flights)) * 100 as \"Minor %\", (sum(moderado_delays) / sum(total_flights)) * 100 as \"Moderate %\", (sum(critico_delays) / sum(total_flights)) * 100 as \"Critical %\", (sum(cancelled_flights) / sum(total_flights)) * 100 as \"Cancelled %\" FROM analytics.gold_airline_daily GROUP BY airline ORDER BY \"Critical %\" DESC LIMIT 10",
+                    "rawSql": "SELECT concat(replaceAll(replaceAll(replaceAll(airline, ' Air Lines Inc.', ''), ' Aka Champlain Enterprises, Inc.', ''), ' d/b/a United Express', ''), ' (N=', toString(sum(total_flights)), ')') as airline_with_total, (sum(on_time_flights) / sum(total_flights)) * 100 as \"On-Time %\", (sum(minor_delays) / sum(total_flights)) * 100 as \"Minor %\", (sum(moderate_delays) / sum(total_flights)) * 100 as \"Moderate %\", (sum(critical_delays) / sum(total_flights)) * 100 as \"Critical %\", (sum(cancelled_flights) / sum(total_flights)) * 100 as \"Cancelled %\" FROM analytics.gold_airline_daily GROUP BY airline ORDER BY \"Critical %\" DESC LIMIT 10",
                     "refId": "A",
                     "datasource": {
                         "type": "grafana-clickhouse-datasource",

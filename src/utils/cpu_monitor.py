@@ -9,7 +9,7 @@ try:
         writer.writerow(['timestamp', 'cpu1', 'cpu2'])
         
         while True:
-            # Intervalo de 0.5s para capturar picos
+            # 0.5s interval to capture peaks
             per_cpu = psutil.cpu_percent(interval=0.5, percpu=True)
             if len(per_cpu) >= 2:
                 writer.writerow([time.time(), per_cpu[0], per_cpu[1]])

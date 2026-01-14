@@ -4,45 +4,45 @@ import os
 
 def explore_parquet(file_path):
     """
-    Explora metadatos y muestra las primeras filas de un archivo Parquet de forma segura.
+    Explores metadata and shows the first few rows of a Parquet file safely.
     """
-    print(f"=== Exploración de Datos: {file_path} ===")
+    print(f"=== Data Exploration: {file_path} ===")
     
-    # 1. Metadatos (Sin cargar datos)
+    # 1. Metadata (Without loading data)
     parquet_file = pq.ParquetFile(file_path)
-    print("\n[Metadatos]")
-    print(f" - Total de filas: {parquet_file.metadata.num_rows:,}")
-    print(f" - Columnas: {len(parquet_file.schema.names)}")
-    print(f" - Grupos de filas (Row Groups): {parquet_file.num_row_groups}")
+    print("\n[Metadata]")
+    print(f" - Total rows: {parquet_file.metadata.num_rows:,}")
+    print(f" - Columns: {len(parquet_file.schema.names)}")
+    print(f" - Row Groups: {parquet_file.num_row_groups}")
     
-    # 2. Muestra de Datos (Cargando solo las primeras 5 filas)
-    print("\n[Muestra de las primeras 5 filas]")
-    # Usamos slice(0, 5) para leer estrictamente lo necesario
+    # 2. Data Sample (Loading only the first 5 rows)
+    print("\n[Sample of the first 5 rows]")
+    # We use slice(0, 5) to read strictly what is necessary
     table_sample = parquet_file.read_row_group(0).slice(0, 5)
     df_sample = table_sample.to_pandas()
     
-    # Mostramos transpuesta para leer todas las columnas cómodamente
+    # Show transposed to read all columns comfortably
     pd.set_option('display.max_columns', None)
     print(df_sample.transpose())
 
 def create_csv_sample(parquet_path, csv_path, n_rows=50000):
     """
-    Crea un archivo CSV pequeño a partir del Parquet para comparativas de rendimiento.
+    Creates a small CSV file from Parquet for performance benchmarking.
     """
-    print(f"\n=== Generando muestra CSV: {csv_path} ({n_rows} filas) ===")
+    print(f"\n=== Generating CSV sample: {csv_path} ({n_rows} rows) ===")
     
     if os.path.exists(csv_path):
-        print(f" ! El archivo {csv_path} ya existe. Saltando generación.")
+        print(f" ! The file {csv_path} already exists. Skipping generation.")
         return
 
-    # Leemos solo el número de filas solicitado
+    # Read only the requested number of rows
     parquet_file = pq.ParquetFile(parquet_path)
-    # Leemos el primer row group y cortamos
+    # Read the first row group and slice
     table = parquet_file.read_row_group(0).slice(0, n_rows)
     df = table.to_pandas()
     
     df.to_csv(csv_path, index=False)
-    print(f" ✓ Muestra CSV creada con éxito. Tamaño: {os.path.getsize(csv_path) / (1024*1024):.2f} MB")
+    print(f" ✓ CSV sample created successfully. Size: {os.path.getsize(csv_path) / (1024*1024):.2f} MB")
 
 if __name__ == "__main__":
     PARQUET_PATH = "data/raw/Combined_Flights_2022.parquet"
@@ -52,4 +52,4 @@ if __name__ == "__main__":
         explore_parquet(PARQUET_PATH)
         create_csv_sample(PARQUET_PATH, CSV_SAMPLE_PATH)
     else:
-        print(f"Error: No se encuentra {PARQUET_PATH}")
+        print(f"Error: {PARQUET_PATH} not found")

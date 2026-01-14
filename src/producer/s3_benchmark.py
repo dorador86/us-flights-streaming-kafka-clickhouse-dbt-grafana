@@ -13,7 +13,7 @@ import clickhouse_connect
 # ==========================================
 # BENCHMARK GOLDEN-TURBO (80k-100k TARGET)
 # ==========================================
-WORKERS = 2 # 1 por núcleo físico = máxima eficiencia real
+WORKERS = 2 # 1 per physical core = maximum real efficiency
 BOOTSTRAP_SERVERS = 'localhost:29092'
 REGISTRY_URL = 'http://localhost:8081'
 TOPIC = 'flights_avro_pro'
@@ -55,13 +55,13 @@ def init_worker():
     global_serializer = AvroSerializer(registry_client, SCHEMA_STR, lambda obj, ctx: obj)
     global_ctx = SerializationContext(TOPIC, MessageField.VALUE)
     
-    # MODO STEADY-FLOW (Maximizar consistencia)
+    # STEADY-FLOW MODE (Maximize consistency)
     global_producer = Producer({
         'bootstrap.servers': BOOTSTRAP_SERVERS,
         'linger.ms': 100,
         'batch.size': 1048576, 
         'compression.type': 'lz4',
-        'acks': '0', # No esperamos al broker para no frenar el flujo
+        'acks': '0', # We don't wait for the broker to avoid slowing down the flow
         'queue.buffering.max.messages': 1000000,
         'message.max.bytes': 4194304
     })
@@ -85,11 +85,11 @@ def producer_worker(chunk):
 
 def run_performance_test():
     limit = 5000000 
-    print(f"\n🚀 LANZANDO MODO STEADY-FLOW (Limit: {limit:,})")
+    print(f"\n🚀 LAUNCHING STEADY-FLOW MODE (Limit: {limit:,})")
     
     client = clickhouse_connect.get_client(host='localhost', username='admin', password='admin')
     client.command("TRUNCATE TABLE flights.flights_raw")
-    # Opcional: client.command("SYSTEM STOP MERGES") # Si queremos ver el tope puro
+    # Optional: client.command("SYSTEM STOP MERGES") # If we want to see the pure peak
     
     s3 = s3fs.S3FileSystem(anon=False)
     with open('.last_bucket_name', 'r') as f: bucket = f.read().strip()
@@ -105,7 +105,7 @@ def run_performance_test():
     start_time = time.time()
     
     with mp.Pool(processes=WORKERS, initializer=init_worker) as pool:
-        # Bloques de 100k: Mucho más ligeros para el hilo principal
+        # 100k blocks: Much lighter for the main thread
         for batch in dataset.to_batches(columns=cols, batch_size=100000):
             if total_sent >= limit: break
             
@@ -116,7 +116,7 @@ def run_performance_test():
             df = df.where(pd.notnull(df), None)
             records = df.to_dict('records')
             
-            # Repartimos en 2 workers
+            # Divide into 2 workers
             chunk_size = len(records) // WORKERS
             chunks = [records[i:i + chunk_size] for i in range(0, len(records), chunk_size)]
             
@@ -125,14 +125,14 @@ def run_performance_test():
             
             elapsed = time.time() - start_time
             if total_sent % 500000 == 0:
-                print(f"📈 [Test] {total_sent:,} encolados. Speed: {total_sent/elapsed:.0f} rec/s")
+                print(f"📈 [Test] {total_sent:,} queued. Speed: {total_sent/elapsed:.0f} rec/s")
         
         pool.close()
         pool.join()
 
     total_duration = time.time() - start_time
-    print(f"\n✅ RESULTADO FINAL: {total_sent:,} registros en {total_duration:.1f}s")
-    print(f"🔥 VELOCIDAD MEDIA: {total_sent/total_duration:.0f} rec/s 🔥")
+    print(f"\n✅ FINAL RESULT: {total_sent:,} records in {total_duration:.1f}s")
+    print(f"🔥 AVERAGE SPEED: {total_sent/total_duration:.0f} rec/s 🔥")
 
 if __name__ == "__main__":
     run_performance_test()

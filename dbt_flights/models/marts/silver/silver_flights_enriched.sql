@@ -23,17 +23,17 @@ with flight_data as (
 select
     *,
     
-    -- Calcula la Gravedad del Retraso
+    -- Calculate Delay Severity
     case
-        when is_cancelled = 1 then 'Cancelado'
+        when is_cancelled = 1 then 'Cancelled'
         when dep_delay <= 0 then 'On-Time' 
-        when dep_delay > 0 and dep_delay <= 15 then 'Leve'
-        when dep_delay > 15 and dep_delay <= 45 then 'Moderado'
-        when dep_delay > 45 then 'Critico'
-        else 'Sin Datos'
+        when dep_delay > 0 and dep_delay <= 15 then 'Minor'
+        when dep_delay > 15 and dep_delay <= 45 then 'Moderate'
+        when dep_delay > 45 then 'Critical'
+        else 'No Data'
     end as delay_severity,
 
-    -- Calcula Velocidad Media (Millas por Hora)
+    -- Calculate Average Speed (Miles per Hour)
     case 
         when air_time > 0 then (distance / (air_time / 60))
         else 0 

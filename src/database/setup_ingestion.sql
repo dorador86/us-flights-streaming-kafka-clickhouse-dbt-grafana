@@ -1,8 +1,8 @@
--- CONFIGURACIÓN SLIM: 11 Columnas Esenciales + DLQ
+-- SLIM CONFIGURATION: 11 Essential Columns + DLQ
 CREATE DATABASE IF NOT EXISTS flights;
 CREATE DATABASE IF NOT EXISTS analytics;
 
--- Limpieza
+-- Cleanup
 DROP TABLE IF EXISTS flights.flights_mv;
 DROP VIEW IF EXISTS flights.flights_errors_mv;
 DROP TABLE IF EXISTS flights.flights_errors;
@@ -10,7 +10,7 @@ DROP TABLE IF EXISTS flights.flights_queue;
 DROP TABLE IF EXISTS flights.flights_raw;
 DROP TABLE IF EXISTS analytics.ingestion_benchmarks;
 
--- 1. Tabla Final de Vuelos (OLAP) - SOLO 11 COLUMNAS
+-- 1. Final Flights Table (OLAP) - ONLY 11 COLUMNS
 CREATE TABLE flights.flights_raw (
     FlightDate Date32,
     Airline String,
@@ -27,7 +27,7 @@ CREATE TABLE flights.flights_raw (
 ORDER BY (FlightDate, Airline, Origin)
 SETTINGS storage_policy = 's3_main';
 
--- 2. Tabla DEAD LETTER QUEUE
+-- 2. DEAD LETTER QUEUE Table
 CREATE TABLE flights.flights_errors (
     topic String,
     partition Int64,
@@ -38,7 +38,7 @@ CREATE TABLE flights.flights_errors (
 ) ENGINE = MergeTree
 ORDER BY timestamp;
 
--- 3. Tabla Kafka (Cola de Ingesta)
+-- 3. Kafka Table (Ingestion Queue)
 CREATE TABLE flights.flights_queue (
     FlightDate Int64,
     Airline String,
@@ -60,7 +60,7 @@ SETTINGS
     format_avro_schema_registry_url = 'http://schema-registry:8081',
     kafka_handle_error_mode = 'stream';
 
--- 4. Materialized View para ERRORES (DLQ)
+-- 4. Materialized View for ERRORS (DLQ)
 CREATE MATERIALIZED VIEW flights.flights_errors_mv TO flights.flights_errors AS
 SELECT
     _topic as topic,
@@ -71,7 +71,7 @@ SELECT
 FROM flights.flights_queue
 WHERE _error != '';
 
--- 5. Materialized View para DATOS OK
+-- 5. Materialized View for VALID DATA
 CREATE MATERIALIZED VIEW flights.flights_mv TO flights.flights_raw AS
 SELECT
     toDate32(fromUnixTimestamp(FlightDate)) AS FlightDate,
@@ -82,7 +82,7 @@ SELECT
 FROM flights.flights_queue
 WHERE _error = '';
 
--- 6. Tabla de Benchmarks
+-- 6. Benchmarks Table
 CREATE TABLE analytics.ingestion_benchmarks (
     test_id String,
     format String,

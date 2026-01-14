@@ -8,14 +8,14 @@ select
     flight_date,
     airline,
     count(*) as total_flights,
-    -- Métricas de rendimiento temporal (Cambiado a SUM para agregación exacta)
+    -- Performance metrics (SUM used for exact aggregation)
     sum(dep_delay) as tot_dep_delay,
     max(dep_delay) as max_dep_delay,
-    -- Conteo por categorías de estado (Nueva lógica)
+    -- Count by status categories
     countIf(delay_severity = 'On-Time') as on_time_flights,
-    countIf(delay_severity = 'Leve') as leve_delays,
-    countIf(delay_severity = 'Moderado') as moderado_delays,
-    countIf(delay_severity = 'Critico') as critico_delays,
+    countIf(delay_severity = 'Minor') as minor_delays,
+    countIf(delay_severity = 'Moderate') as moderate_delays,
+    countIf(delay_severity = 'Critical') as critical_delays,
     countIf(is_cancelled = 1) as cancelled_flights,
     max(processed_at) as last_processed_at
 from {{ ref('silver_flights_enriched') }}

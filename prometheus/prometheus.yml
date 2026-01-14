@@ -8,7 +8,7 @@ scrape_configs:
 
   - job_name: 'kafka'
     static_configs:
-      - targets: ['kafka:9092'] # Nota: Kafka requiere exporters para métricas detalladas, pero esto es el esqueleto base.
+      - targets: ['kafka:9092'] # Note: Kafka requires exporters for detailed metrics, but this is the base skeleton.
 
   - job_name: 'clickhouse'
     static_configs:

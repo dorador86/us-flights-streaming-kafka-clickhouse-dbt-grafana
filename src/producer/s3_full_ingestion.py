@@ -10,7 +10,7 @@ from confluent_kafka.serialization import SerializationContext, MessageField
 import clickhouse_connect
 
 # ==========================================
-# FULL INGESTIÓN - STEADY-FLOW PATTERN (ESTABLE)
+# FULL INGESTION - STEADY-FLOW PATTERN (STABLE)
 # ==========================================
 WORKERS = 2
 BOOTSTRAP_SERVERS = 'localhost:29092'
@@ -86,9 +86,9 @@ class S3FullIngestion:
         self.s3 = s3fs.S3FileSystem(anon=False)
 
     def run(self):
-        print(f"\n🚀 LANZANDO INGESTA DEFINITIVA (Steady-Flow | Workers: {WORKERS})")
+        print(f"\n🚀 LAUNCHING FINAL INGESTION (Steady-Flow | Workers: {WORKERS})")
         
-        # 1. Limpieza Nuclear
+        # 1. Nuclear Cleanup
         client = clickhouse_connect.get_client(host='localhost', username='admin', password='admin')
         tables = [
             "flights.flights_raw",
@@ -99,10 +99,10 @@ class S3FullIngestion:
         for table in tables:
             try:
                 client.command(f"TRUNCATE TABLE {table}")
-                print(f"✓ {table} truncada.")
+                print(f"✓ {table} truncated.")
             except: pass
 
-        # 2. Archivos
+        # 2. Files
         with open('.last_bucket_name', 'r') as f: bucket = f.read().strip()
         files = [
             f"{bucket}/raw/flights/year=2018/Combined_Flights_2018.parquet",
@@ -118,12 +118,12 @@ class S3FullIngestion:
         with mp.Pool(processes=WORKERS, initializer=init_worker) as pool:
             for s3_path in files:
                 filename = s3_path.split('/')[-1]
-                print(f"\n📂 Procesando: {filename} ...")
+                print(f"\n📂 Processing: {filename} ...")
                 
                 try:
                     dataset = ds.dataset(s3_path, filesystem=self.s3, format="parquet")
                 except:
-                    print(f"⚠️ Salto {filename}: No encontrado")
+                    print(f"⚠️ Skipping {filename}: Not found")
                     continue
 
                 cols = ['FlightDate', 'Airline', 'Tail_Number', 'Origin', 'Dest', 'Cancelled', 'DepDelay', 'ArrDelay', 'Distance',
@@ -151,17 +151,17 @@ class S3FullIngestion:
                     
                     if total_global_sent % 500000 == 0:
                         elapsed = time.time() - start_time
-                        print(f"📈 [Progreso] {total_global_sent:,} registros. Speed: {total_global_sent/elapsed:.0f} rec/s")
+                        print(f"📈 [Progress] {total_global_sent:,} records. Speed: {total_global_sent/elapsed:.0f} rec/s")
 
-            print("\n⌛ Esperando a que el sistema procese los últimos mensajes...")
+            print("\n⌛ Waiting for the system to process the last messages...")
             pool.close()
             pool.join()
 
         duration = time.time() - start_time
-        print(f"\n🎉 INGESTA DEFINITIVA COMPLETADA 🎉")
-        print(f"📊 Total registros: {total_global_sent:,}")
-        print(f"⏱️ Tiempo total: {duration/60:.2f} minutos")
-        print(f"🚀 Velocidad media: {total_global_sent/duration:.0f} rec/s")
+        print(f"\n🎉 FINAL INGESTION COMPLETED 🎉")
+        print(f"📊 Total records: {total_global_sent:,}")
+        print(f"⏱️ Total time: {duration/60:.2f} minutes")
+        print(f"🚀 Average speed: {total_global_sent/duration:.0f} rec/s")
 
 if __name__ == "__main__":
     S3FullIngestion().run()

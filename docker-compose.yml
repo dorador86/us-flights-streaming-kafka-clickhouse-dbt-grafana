@@ -1,5 +1,5 @@
 services:
-  # --- Kafka: Motor de mensajería Oficial de Apache (KRaft mode) ---
+  # --- Kafka: Official Apache Messaging Engine (KRaft mode) ---
   kafka:
     image: apache/kafka:3.7.0
     container_name: kafka
@@ -15,15 +15,15 @@ services:
       - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
       - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
       - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
-      # Estabilidad para Cluster de 1 solo Nodo
+      # Stability for Single-Node Cluster
       - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
       - KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS=1
       - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
       - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
       - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
-      # Optimización JVM para baja memoria
+      # JVM Optimization for low memory
       - KAFKA_HEAP_OPTS=-Xmx600M -Xms600M
-      # Retención MUY agresiva (5 min) para benchmarks masivos
+      # VERY aggressive retention (5 min) for massive benchmarks
       - KAFKA_LOG_DIRS=/var/lib/kafka/data
       - KAFKA_LOG_RETENTION_MS=300000
       - KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS=60000
@@ -38,7 +38,7 @@ services:
     networks:
       - flights_net
 
-  # --- Schema Registry: Gestión de Esquemas Avro ---
+  # --- Schema Registry: Avro Schema Management ---
   schema-registry:
     image: confluentinc/cp-schema-registry:7.5.0
     hostname: schema-registry
@@ -54,7 +54,7 @@ services:
     networks:
       - flights_net
 
-  # --- ClickHouse: Base de Datos Analítica (OLAP) ---
+  # --- ClickHouse: Analytical Database (OLAP) ---
   clickhouse:
     image: clickhouse/clickhouse-server:24.3-alpine
     container_name: clickhouse
@@ -80,7 +80,7 @@ services:
     networks:
       - flights_net
 
-  # --- Prometheus: Monitorización ---
+  # --- Prometheus: Monitoring ---
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
@@ -96,7 +96,7 @@ services:
     networks:
       - flights_net
 
-  # --- Grafana: Visualización ---
+  # --- Grafana: Visualization ---
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
