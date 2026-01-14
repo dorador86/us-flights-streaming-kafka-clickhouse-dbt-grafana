@@ -71,11 +71,11 @@ This section showcases the definitive execution of the entire dataset.
 
 ### **I. System Health & Performance (Ops Dashboard)**
 *Captures the sustained ingestion speed, peak flush rates, and cluster resource stability during the 29M record stream.*
-![Ops Dashboard Snapshot](ops_dashboard_final_snapshot.png)
+![Ops Dashboard Snapshot](ops_dashboard_final_snapshot.jpg)
 
 ### **II. Business Insights (Executive Dashboard)**
-*Aggregated analytics from the Gold Layer, highlighting airline performance, delay types, and congestion trends across the US.*
-![Executive Dashboard Snapshot](executive_dashboard_snapshot.png)
+*Aggregated analytics from the Gold Layer providing real-time metrics, including average speeds, cancellation rates, and insights into airline performance and regional congestion trends.*
+![Executive Dashboard Snapshot](executive_dashboard_snapshot.jpg)
 
 ---
 
@@ -93,16 +93,7 @@ The logic is orchestrated using **dbt-clickhouse**, following an ELT pattern acr
 
 ---
 
-## 📊 Visual Insights
-
-*(Space reserved for real-world execution screenshot)*
-![Grafana Executive Dashboard Snapshot](executive_dashboard_snapshot.png)
-
-*The dashboard reflects real-time metrics, including average speeds, cancellation rates, and heatmaps of delay intensity across the US network.*
-
----
-
-## 💻 Setup & Usage
+##  Setup & Usage
 
 ### 1. Infrastructure Deployment
 1.  **Clone the Repository**
