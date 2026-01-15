@@ -1,4 +1,4 @@
-# <img src="https://upload.wikimedia.org/wikipedia/en/thumb/a/a4/Flag_of_the_United_States.svg/1200px-Flag_of_the_United_States.svg.png" width="35" height="21" /> US Flights Real-Time Analytics Stack: ELT on Kafka & ClickHouse
+# <img src="https://upload.wikimedia.org/wikipedia/en/thumb/a/a4/Flag_of_the_United_States.svg/1200px-Flag_of_the_United_States.svg.png" width="35" height="21" /> US Flights Data Engineering: Real-Time Streaming ELT on Kafka & ClickHouse
 
 [![Kafka](https://img.shields.io/badge/Apache_Kafka-3.7-white?logo=apache-kafka&style=for-the-badge)](https://kafka.apache.org/)
 [![ClickHouse](https://img.shields.io/badge/ClickHouse-OLAP-FFCC00?logo=clickhouse&style=for-the-badge)](https://clickhouse.com/)
@@ -74,7 +74,7 @@ This section showcases the definitive execution of the entire dataset.
 ![Ops Dashboard Snapshot](ops_dashboard_final_snapshot.jpg)
 
 ### **II. Business Insights (Executive Dashboard)**
-*Aggregated analytics from the Gold Layer providing real-time metrics, including average speeds, cancellation rates, and insights into airline performance and regional congestion trends.*
+*Aggregated analytics from the Gold Layer providing real-time metrics, including departure delay averages, cancellation rates, airline performance by delay severity, and airport congestion hotspots.*
 ![Executive Dashboard Snapshot](executive_dashboard_snapshot.png)
 
 ---
