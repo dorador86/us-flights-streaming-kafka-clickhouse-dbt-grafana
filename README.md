@@ -75,7 +75,7 @@ This section showcases the definitive execution of the entire dataset.
 
 ### **II. Business Insights (Executive Dashboard)**
 *Aggregated analytics from the Gold Layer providing real-time metrics, including average speeds, cancellation rates, and insights into airline performance and regional congestion trends.*
-![Executive Dashboard Snapshot](executive_dashboard_snapshot.jpg)
+![Executive Dashboard Snapshot](executive_dashboard_snapshot.png)
 
 ---
 
