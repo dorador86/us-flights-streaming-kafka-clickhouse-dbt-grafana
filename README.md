@@ -44,7 +44,7 @@ Equipped with a **Dead Letter Queue (DLQ)** implemented directly via ClickHouse 
 
 ---
 
-## � Design Decisions & Preliminary Benchmarks
+## 📐 Design Decisions & Preliminary Benchmarks
 
 Before the full 29M record execution, a **preliminary design phase** was conducted to select the most efficient data format. 
 
